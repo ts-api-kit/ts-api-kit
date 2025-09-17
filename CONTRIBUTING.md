@@ -126,7 +126,7 @@ Seguimos o [Conventional Commits](https://www.conventionalcommits.org/):
 
 ### Estrutura do Projeto
 
-```
+```text
 ts-api-core/
 ├── packages/
 │   ├── ts-api-core/          # Framework principal
@@ -170,7 +170,7 @@ pnpm test packages/ts-api-core
 
 - 💬 [GitHub Discussions](https://github.com/devzolo/ts-api-core/discussions)
 - 🐛 [GitHub Issues](https://github.com/devzolo/ts-api-core/issues)
-- 📧 Email: contact@devzolo.com
+- 📧 Email: [contact@devzolo.com](mailto:contact@devzolo.com)
 
 ## 📄 Licença
 
