@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - examples/*
+  - apps/*
+  - docs
+
+onlyBuiltDependencies:
+  - nx
