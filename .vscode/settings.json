@@ -1,0 +1,19 @@
+{
+  "nodejs-testing.extensions": [
+    { "extensions": ["js", "mjs", "cjs"], "parameters": [] },
+    {
+      "extensions": ["ts", "mts", "cts"],
+      "parameters": ["--experimental-transform-types", "--no-warnings"]
+    }
+  ],
+  "nodejs-testing.include": ["."],
+  "nodejs-testing.exclude": ["**/node_modules/**", "**/dist/**", "**/build/**"],
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "markdownlint.config": {
+    "MD041": false
+  },
+  "typescript.experimental.useTsgo": true
+}
