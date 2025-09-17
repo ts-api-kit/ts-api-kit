@@ -1,0 +1,81 @@
+{
+  "name": "@ts-api-kit/core",
+  "version": "0.1.0",
+  "description": "Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "typescript",
+    "api",
+    "framework",
+    "hono",
+    "valibot",
+    "file-based-routing",
+    "openapi",
+    "validation"
+  ],
+  "author": "devzolo <contact@devzolo.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devzolo/ts-api-core.git",
+    "directory": "packages/ts-api-core"
+  },
+  "homepage": "https://github.com/devzolo/ts-api-core#readme",
+  "bugs": {
+    "url": "https://github.com/devzolo/ts-api-core/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test --experimental-transform-types --loader @ts-api-kit/core/node --no-warnings",
+    "lint": "cd ../../ && biome check packages/core",
+    "lint:fix": "cd ../../ && biome check packages/core --write",
+    "format": "cd ../../ && biome format packages/core",
+    "format:fix": "cd ../../ && biome format packages/core --write",
+    "check": "tsgo --skipLibCheck"
+  },
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./server": {
+      "default": "./src/server.ts"
+    },
+    "./openapi": {
+      "default": "./src/openapi/index.ts"
+    },
+    "./utils": {
+      "default": "./src/utils/index.ts"
+    },
+    "./node": {
+      "default": "./src/node/index.ts"
+    }
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.11.3",
+    "@kitajs/html": "^4.2.9",
+    "@scalar/hono-api-reference": "^0.9.16",
+    "@standard-schema/spec": "^1.0.0",
+    "@valibot/to-json-schema": "^1.3.0",
+    "fast-glob": "^3.3.2",
+    "hono": "^4.6.7",
+    "pathe": "^2.0.3"
+  },
+  "peerDependencies": {
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "typescript": "^5.6.2"
+  }
+}

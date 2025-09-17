@@ -1,0 +1,57 @@
+# Source files (keep only dist)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+tsconfig.tsbuildinfo
+
+# Test files
+*.test.ts
+*.spec.ts
+test/
+tests/
+__tests__/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Examples
+examples/
+
+# Config files
+.biome.json
+biome.json
+.eslintrc*
+.prettierrc*
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+!dist/index.js
+!dist/index.d.ts
+!dist/**/*.js
+!dist/**/*.d.ts
