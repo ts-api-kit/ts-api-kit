@@ -11,14 +11,15 @@
  * @module
  */
 
-import console from "node:console";
+import process from "node:process";
 import { serve } from "@hono/node-server";
 import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Context,MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
+import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
 import type { response } from "./openapi/markers.ts";
@@ -30,6 +31,7 @@ import {
 	type RequestSchemas,
 	type ResponsesMap,
 } from "./openapi/registry.ts";
+import { createLogger } from "./utils/logger.ts";
 /**
  * ──────────────────────────────────────────────────────────────────────────────
  * Error + tiny helpers
@@ -38,7 +40,7 @@ import {
 
 /**
  * Custom error class for application-specific errors with HTTP status codes.
- * 
+ *
  * @example
  * ```typescript
  * throw new AppError(404, "User not found", { userId: 123 });
@@ -172,7 +174,6 @@ export const json = <T>(data: T, init?: ResponseInit): Response =>
 		headers: { "Content-Type": "application/json" },
 		...init,
 	});
-
 
 /**
  * Serialises a typed route response to JSON while enforcing the declared
@@ -601,7 +602,7 @@ export const jsxStreamHono = (
 
 /**
  * Infers the input type from a StandardSchemaV1 schema.
- * 
+ *
  * @template S - The schema type
  * @returns The inferred input type
  */
@@ -611,7 +612,7 @@ export type InferInput<S> = S extends StandardSchemaV1<any, any>
 
 /**
  * Infers the output type from a StandardSchemaV1 schema.
- * 
+ *
  * @template S - The schema type
  * @returns The inferred output type
  */
@@ -895,12 +896,12 @@ export function createHandler<T extends RouteSpec>(
 			if (!registered && spec && (spec as WithOpenAPI).openapi) {
 				// Hono expõe o padrão de rota em c.req.routePath em v4+; fallback para c.req.path
 				const method = c.req.method.toLowerCase() as HttpMethod;
-				const path = (c.req as any).routePath ?? c.req.path; // pode ser "/users/:id"
+				const path = routePath(c) ?? c.req.path; // pode ser "/users/:id"
 				const { req, res, meta } = extractSchemas(spec);
-				// console.log(`Registering OpenAPI route: ${method} ${path}`);
-				// console.log(`Request schemas:`, req);
-				// console.log(`Response schemas:`, res);
-				// console.log(`Meta:`, meta);
+				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
+				// this.log.info(`Request schemas:`, req);
+				// this.log.info(`Response schemas:`, res);
+				// this.log.info(`Meta:`, meta);
 				lazyRegister(method, path, { request: req, responses: res, ...meta });
 				registered = true;
 			}
@@ -982,8 +983,7 @@ export function createHandler<T extends RouteSpec>(
 				body = body.body;
 			}
 			return c.json(body, status as any);
-		} catch (err: any) {
-			console.error("Handler error:", err);
+		} catch (err) {
 			if (err instanceof AppError) {
 				return c.json(
 					{
@@ -1203,6 +1203,8 @@ export default class Server {
 	private app = new Hono();
 	private port: number = parseInt(process.env.PORT ?? "3000", 10);
 
+	private log = createLogger("core:server");
+
 	constructor(port?: number) {
 		this.port = port ?? this.port;
 	}
@@ -1255,7 +1257,7 @@ export default class Server {
 					});
 				}
 			} catch (error) {
-				console.error("OpenAPI generation error:", error);
+				this.log.error("OpenAPI generation error:", error);
 				return c.json(
 					{
 						error: "Failed to generate OpenAPI document",
@@ -1280,7 +1282,7 @@ export default class Server {
 
 		this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
 		this.app.onError((err, c) => {
-			console.error(err);
+			this.log.error(err);
 			return c.json({ error: "Internal Server Error" }, 500);
 		});
 	}
@@ -1297,7 +1299,7 @@ export default class Server {
 
 	start(port?: number): void {
 		const finalPort = port ?? this.port;
-		console.log(
+		this.log.info(
 			`🚀 Listening on http://localhost:${finalPort}  •  Docs: http://localhost:${finalPort}/docs`,
 		);
 		serve({ fetch: this.app.fetch, port: finalPort });
