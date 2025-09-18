@@ -56,6 +56,17 @@ function sortByDepthDesc(paths: string[]) {
 function sortByDepthAsc(paths: string[]) {
 	return [...paths].sort((a, b) => a.split("/").length - b.split("/").length);
 }
+/**
+ * Mounts file-system based routes and middleware into a Hono application.
+ *
+ * The router scans the provided directory, wires HTTP method handlers, merges
+ * OpenAPI metadata and applies directory-scoped middleware before registering
+ * everything with the runtime server.
+ *
+ * @param app - Hono application instance that receives the mounted routes
+ * @param opts - Directory and glob configuration for discovering routes
+ * @returns Number of mounted routes and middleware for diagnostics
+ */
 export async function mountFileRouter(
 	app: Hono,
 	opts: FileRouterOptions,

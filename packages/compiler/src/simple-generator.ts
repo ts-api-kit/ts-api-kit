@@ -882,7 +882,13 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
 	return { type: "object" };
 }
 
-// Simple OpenAPI generator that doesn't depend on complex imports
+/**
+ * Generates an OpenAPI document directly from a TypeScript project config,
+ * bypassing the more featureful plugin pipeline.
+ *
+ * @param projectPath - Path to the tsconfig file to analyse
+ * @param outputPath - Destination for the generated OpenAPI JSON file
+ */
 function generateOpenAPI(projectPath: string, outputPath: string): void {
 	console.log(`Loading TypeScript project from: ${projectPath}`);
 	console.log(`Output will be written to: ${outputPath}`);

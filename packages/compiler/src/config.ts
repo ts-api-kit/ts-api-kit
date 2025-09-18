@@ -13,6 +13,13 @@ export interface TSAPIConfig {
 	exclude?: string[];
 }
 
+/**
+ * Loads the compiler configuration from disk, falling back to sensible
+ * defaults when no file is present.
+ *
+ * @param configPath - Optional path to the JSON configuration file
+ * @returns The merged compiler configuration
+ */
 export function loadConfig(configPath?: string): TSAPIConfig {
 	const defaultConfig: TSAPIConfig = {
 		output: "./openapi.json",
@@ -60,6 +67,12 @@ export function loadConfig(configPath?: string): TSAPIConfig {
 	}
 }
 
+/**
+ * Persists a compiler configuration to disk using pretty-printed JSON.
+ *
+ * @param config - Configuration object to write
+ * @param configPath - Target file path, defaults to the project root config
+ */
 export function saveConfig(
 	config: TSAPIConfig,
 	configPath: string = "./ts-api-compiler.config.json",
@@ -73,6 +86,13 @@ export function saveConfig(
 	}
 }
 
+/**
+ * Generates the default compiler configuration and writes it to disk so users
+ * can tweak the generated file.
+ *
+ * @param configPath - Destination for the generated configuration file
+ * @returns The default configuration object
+ */
 export function createDefaultConfig(
 	configPath: string = "./ts-api-compiler.config.json",
 ): TSAPIConfig {

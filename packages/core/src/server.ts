@@ -173,7 +173,15 @@ export const json = <T>(data: T, init?: ResponseInit): Response =>
 		...init,
 	});
 
-// Typed json function that enforces response types
+
+/**
+ * Serialises a typed route response to JSON while enforcing the declared
+ * response codes and payload shapes.
+ *
+ * @param data - Data matching the route specification for the given status
+ * @param init - Optional init overrides forwarded to the Response constructor
+ * @returns A Response containing the JSON representation of the payload
+ */
 export const typedJson = <T extends RouteSpec, S extends number = 200>(
 	data: ResponseForStatus<T, S>,
 	init?: ResponseInit,
@@ -183,7 +191,10 @@ export const typedJson = <T extends RouteSpec, S extends number = 200>(
 		...init,
 	});
 
-// Response tools interface
+/**
+ * Bag of strongly typed response helpers injected into route handlers so they
+ * can emit consistent `Response` objects without repeating boilerplate.
+ */
 export interface ResponseTools<T extends RouteSpec> {
 	// Typed JSON response with status validation
 	json: <S extends ValidStatusCodes<T>>(
@@ -386,7 +397,11 @@ const createJsxResponse = async (
 		...init,
 	});
 
-// Create response tools object
+/**
+ * Builds the set of typed response helpers used within request handlers.
+ *
+ * @returns Helpers that serialise JSON, text, HTML, JSX, redirects and files
+ */
 export const createResponseTools = <
 	T extends RouteSpec,
 >(): ResponseTools<T> => ({
@@ -526,6 +541,12 @@ export const createResponseTools = <
 	) => createErrorResponse(message ?? "Internal Server Error", 500, init),
 });
 
+/**
+ * Streams chunks of server-rendered JSX to the active Hono response.
+ *
+ * @param html - Callback that renders HTML for a given request identifier
+ * @returns A streaming Response with the rendered HTML
+ */
 export const jsxStream = (
 	html: (rid: number | string) => string | Promise<string>,
 ): Response => {
@@ -550,6 +571,14 @@ export const jsxStream = (
 //   return renderToStream(html);
 // };
 
+/**
+ * Streams JSX using an explicit Hono context, useful when the helper is used
+ * outside of the implicit request lifecycle handled by `jsxStream`.
+ *
+ * @param c - Current Hono request context
+ * @param html - Callback that renders HTML for a given request identifier
+ * @returns A streaming Response handled by Hono
+ */
 export const jsxStreamHono = (
 	c: Context<any, any, {}>,
 	html: (rid: number | string) => string | Promise<string>,
@@ -655,6 +684,14 @@ async function validatePart<S extends AnySchema>(
 	};
 }
 
+/**
+ * Wraps a Valibot schema with the Standard Schema interface used by hono and
+ * Scalar so validations and documentation share the same contract.
+ *
+ * @param schema - Valibot schema to adapt
+ * @param vendor - Namespace used to tag the generated schema
+ * @returns The schema decorated with StandardSchemaV1 metadata
+ */
 export function toStandardSchema<S extends AnySchema>(
 	schema: S,
 	vendor = "hono-file-router",
@@ -835,7 +872,14 @@ function extractSchemas(spec?: RouteSpec) {
 	return { req, res, meta } as const;
 }
 
-// ⟵ NOVO: versão do createHandler que registra OpenAPI LAZY na primeira chamada
+/**
+ * Creates a Hono-compatible handler that validates inputs, enriches the
+ * request context and lazily registers OpenAPI metadata on first invocation.
+ *
+ * @param spec - Optional route specification containing schemas and metadata
+ * @param handler - Business logic executed after validation succeeds
+ * @returns A function that can be mounted onto a Hono router
+ */
 export function createHandler<T extends RouteSpec>(
 	spec: T | undefined,
 	handler: (
@@ -962,6 +1006,13 @@ export function createHandler<T extends RouteSpec>(
 	};
 }
 
+/**
+ * Enhances a schema definition with helpers that surface Standard Schema
+ * adapters for each request segment.
+ *
+ * @param schema - Route schema covering params, query, headers and body
+ * @returns Original schema together with a `getStandardSchema` accessor
+ */
 export function createSchema<T extends SchemaDefinition>(
 	schema: T,
 ): T & {
@@ -1054,6 +1105,15 @@ export const options: any = createHandler<RouteSpec>;
  */
 export const head: any = createHandler<RouteSpec>;
 
+/**
+ * Flexible wrapper that converts either a spec + handler pair or a standalone
+ * handler into a fully configured route with metadata attached for OpenAPI.
+ *
+ * @param specOrHandler - Route configuration or the handler itself
+ * @param handlerOrFilePath - Handler (when a spec is provided) or the file path
+ * @param filePath - Optional override for the source file path used in docs
+ * @returns Hono handler augmented with route configuration metadata
+ */
 export function handle<T extends RouteSpec = {}>(
 	specOrHandler:
 		| T

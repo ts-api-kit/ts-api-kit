@@ -355,7 +355,13 @@ export class OpenAPIPlugin {
 	}
 }
 
-// Plugin factory function for TypeScript
+/**
+ * Factory that produces the `tsc` plugin responsible for collecting route
+ * metadata and emitting the OpenAPI document.
+ *
+ * @param options - Plugin configuration including output file and metadata
+ * @returns Function invoked by the TypeScript compiler with the active program
+ */
 export function createOpenAPIPlugin(
 	options: OpenAPIPluginOptions = {},
 ): (program: ts.Program) => void {

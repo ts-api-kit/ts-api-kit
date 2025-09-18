@@ -1,7 +1,11 @@
 import type * as ts from "typescript";
 import { createOpenAPIPlugin } from "./plugin.ts";
 
-// Simple plugin that can be used with ts-node
+/**
+ * Minimal TypeScript plugin entrypoint used for quick prototyping scenarios.
+ *
+ * @param program - TypeScript program provided by the compiler host
+ */
 export default function (program: ts.Program): void {
 	const plugin = createOpenAPIPlugin({
 		outputFile: "openapi.json",

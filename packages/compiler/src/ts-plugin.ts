@@ -2,7 +2,14 @@ import type * as ts from "typescript";
 import { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
 import { loadPluginConfig } from "./plugin-config.ts";
 
-// This is the main entry point for the TypeScript plugin
+/**
+ * Main entry point wired into the TypeScript compiler when the plugin is used
+ * via `tsconfig.json`.
+ *
+ * @param program - Active TypeScript program
+ * @param options - OpenAPI plugin options provided by the user
+ * @returns A transformer factory passed back to the compiler
+ */
 export default function openAPIPlugin(
 	program: ts.Program,
 	options: OpenAPIPluginOptions = {},

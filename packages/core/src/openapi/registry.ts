@@ -84,6 +84,12 @@ export type RouteMeta = {
 
 const ROUTES: RouteMeta[] = [];
 
+/**
+ * Stores metadata for a Hono route so it can be emitted as part of the
+ * aggregated OpenAPI document.
+ *
+ * @param meta - Route definition including method, path and OpenAPI extras
+ */
 export function registerRoute(meta: RouteMeta): void {
 	// Atualiza rota existente ou adiciona nova
 	const key = `${meta.method} ${meta.path}`;
@@ -118,6 +124,13 @@ export function buildOpenAPIDocument(_opts: {
 }
 
 // Exponha utilitário para registro lazy a partir dos handlers
+/**
+ * Registers OpenAPI metadata lazily once a handler is first executed.
+ *
+ * @param method - HTTP method resolved from the handler export
+ * @param path - Resolved route path in OpenAPI syntax (e.g. `/users/{id}`)
+ * @param partial - Optional request/response schemas and descriptive metadata
+ */
 export function lazyRegister(
 	method: HttpMethod,
 	path: string,

@@ -31,8 +31,15 @@ export type MediaType =
 	| "multipart/form-data"
 	| "application/x-www-form-urlencoded";
 
-// Minimal schema translator for Valibot -> JSON Schema (works with common primitives)
-// For full coverage, swap with a lib like `valibot-json-schema` later.
+/**
+ * Converts a Valibot schema into a JSON Schema fragment understood by OpenAPI.
+ *
+ * The converter focuses on the common primitives used by the kit and keeps the
+ * translation cheap so it can run at publish time without a TypeScript checker.
+ *
+ * @param schema - Valibot schema to translate
+ * @returns A JSON Schema representation that can be embedded in OpenAPI docs
+ */
 export const vToJsonSchema = (schema: v.BaseSchema<any, any, any>): Json => {
 	const type = schema.type;
 
@@ -163,6 +170,10 @@ export type OpenAPIBuilderOptions = {
 	servers?: { url: string; description?: string }[];
 };
 
+/**
+ * Minimal OpenAPI builder tailored for the file-router so we can collect
+ * metadata without pulling heavy dependencies at publish time.
+ */
 export class OpenAPIBuilder {
 	private doc: any;
 	private paths: Record<string, any> = {};
