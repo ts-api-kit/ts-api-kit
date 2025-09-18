@@ -1,61 +1,61 @@
-# TS API Core
+# TS API Kit
 
-Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot.
+A modern TypeScript framework for APIs based on Hono with file-based routing and Valibot schema validation.
 
-[![npm version](https://badge.fury.io/js/ts-api-core.svg)](https://badge.fury.io/js/ts-api-core)
+[![npm version](https://badge.fury.io/js/@ts-api-kit/core.svg)](https://badge.fury.io/js/@ts-api-kit/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue.svg)](https://www.typescriptlang.org/)
 
-## 🚀 Características
+## 🚀 Features
 
-- 🗂️ **Roteamento por arquivos** - Organize suas rotas como arquivos
-- 🔒 **Validação de schemas** - Validação automática com Valibot
-- 🛠️ **TypeScript nativo** - Suporte completo ao TypeScript
-- ⚡ **Baseado no Hono** - Performance e simplicidade
-- 🔧 **Middlewares** - Sistema de middlewares flexível
-- 📝 **Auto-documentação** - Schemas como documentação
-- 🔄 **OpenAPI Generation** - Geração automática de documentação OpenAPI
-- 🎯 **SvelteKit Integration** - Remote Functions para SvelteKit
+- 🗂️ **File-based routing** - Organize your routes as files
+- 🔒 **Schema validation** - Automatic validation with Valibot
+- 🛠️ **Native TypeScript** - Full TypeScript support
+- ⚡ **Hono-powered** - Performance and simplicity
+- 🔧 **Middlewares** - Flexible middleware system
+- 📝 **Auto-documentation** - Schemas as documentation
+- 🔄 **OpenAPI Generation** - Automatic OpenAPI documentation generation
+- 🎯 **SvelteKit Integration** - Remote Functions for SvelteKit
 
-## 📦 Pacotes
+## 📦 Packages
 
-Este monorepo contém os seguintes pacotes:
+This monorepo contains the following packages:
 
-- **[ts-api-core](./packages/ts-api-core)** - Framework principal
-- **[ts-api-compiler](./packages/ts-api-compiler)** - Compilador e gerador OpenAPI
-- **[openapi-to-remote](./packages/openapi-to-remote)** - Gerador de Remote Functions para SvelteKit
+- **[@ts-api-kit/core](./packages/core)** - Main framework
+- **[@ts-api-kit/compiler](./packages/compiler)** - Compiler and OpenAPI generator
+- **[openapi-to-remote](./packages/openapi-to-remote)** - SvelteKit Remote Functions generator
 
-## 🚀 Instalação
+## 🚀 Installation
 
-### Framework Principal
-
-```bash
-npm install ts-api-core valibot
-# ou
-pnpm add ts-api-core valibot
-# ou
-yarn add ts-api-core valibot
-```
-
-### Compilador OpenAPI
+### Main Framework
 
 ```bash
-npm install -D ts-api-compiler
-# ou
-pnpm add -D ts-api-compiler
+npm install @ts-api-kit/core valibot
+# or
+pnpm add @ts-api-kit/core valibot
+# or
+yarn add @ts-api-kit/core valibot
 ```
 
-### Gerador SvelteKit
+### OpenAPI Compiler
+
+```bash
+npm install -D @ts-api-kit/compiler
+# or
+pnpm add -D @ts-api-kit/compiler
+```
+
+### SvelteKit Generator
 
 ```bash
 npm install -D openapi-to-remote
-# ou
+# or
 pnpm add -D openapi-to-remote
 ```
 
-## 🎯 Uso Rápido
+## 🎯 Quick Start
 
-### 1. Criando uma rota simples
+### 1. Creating a simple route
 
 ```typescript
 // src/routes/+route.ts
@@ -76,95 +76,95 @@ export default {
 };
 ```
 
-### 2. Executando o servidor
+### 2. Running the server
 
 ```bash
-# Usando o loader do ts-api-core
-node --loader ts-api-core/node --experimental-transform-types --no-warnings src/index.ts
+# Using ts-api-kit loader
+node --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts
 
-# Ou com script npm
+# Or with npm script
 npm run dev
 ```
 
-### 3. Gerando documentação OpenAPI
+### 3. Generating OpenAPI documentation
 
 ```bash
-# Gerar openapi.json
-npx ts-api-compiler generate-openapi
+# Generate openapi.json
+npx @ts-api-kit/compiler generate-openapi
 
-# Ou com script
+# Or with script
 npm run build:openapi
 ```
 
-## 📚 Documentação
+## 📚 Documentation
 
-- **[Documentação Completa](./docs)** - Guias detalhados e exemplos
-- **[Getting Started](./docs/routes/getting-started/quick-start/+page.md)** - Primeiros passos
-- **[Exemplos](./examples)** - Exemplos práticos de implementação
+- **[Complete Documentation](./docs)** - Detailed guides and examples
+- **[Getting Started](./docs/routes/getting-started/quick-start/+page.md)** - First steps
+- **[Examples](./examples)** - Practical implementation examples
 
-## 🛠️ Desenvolvimento
+## 🛠️ Development
 
-### Pré-requisitos
+### Prerequisites
 
 - Node.js >= 18.17
 - pnpm >= 8.0.0
 
-### Instalação
+### Installation
 
 ```bash
-# Clone o repositório
+# Clone the repository
 git clone https://github.com/devzolo/ts-api-core.git
 cd ts-api-core
 
-# Instale as dependências
+# Install dependencies
 pnpm install
 
-# Execute em modo de desenvolvimento
+# Run in development mode
 pnpm dev
 
-# Build todos os pacotes
+# Build all packages
 pnpm build
 
-# Execute os testes
+# Run tests
 pnpm test
 ```
 
-### Estrutura do Projeto
+### Project Structure
 
 ```text
 ts-api-core/
 ├── packages/
-│   ├── ts-api-core/          # Framework principal
-│   ├── ts-api-compiler/      # Compilador OpenAPI
-│   └── openapi-to-remote/    # Gerador SvelteKit
+│   ├── core/                   # Main framework
+│   ├── compiler/               # OpenAPI compiler
+│   └── openapi-to-remote/      # SvelteKit generator
 ├── examples/
-│   ├── simple-example/       # Exemplo básico
-│   └── frontend/             # Exemplo com SvelteKit
-├── docs/                     # Documentação
-└── .github/                  # CI/CD
+│   ├── simple-example/         # Basic example
+│   └── frontend/               # SvelteKit example
+├── docs/                       # Documentation
+└── .github/                    # CI/CD
 ```
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Por favor, leia nosso [Guia de Contribuição](./CONTRIBUTING.md) para detalhes sobre nosso código de conduta e o processo para enviar pull requests.
+Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-## 📄 Licença
+## 📄 License
 
-Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](./LICENSE) para detalhes.
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
-## 🙏 Agradecimentos
+## 🙏 Acknowledgments
 
-- [Hono](https://hono.dev/) - Framework web moderno
-- [Valibot](https://valibot.dev/) - Biblioteca de validação
-- [SvelteKit](https://kit.svelte.dev/) - Framework web
-- [TypeScript](https://www.typescriptlang.org/) - Linguagem de programação
+- [Hono](https://hono.dev/) - Modern web framework
+- [Valibot](https://valibot.dev/) - Validation library
+- [SvelteKit](https://kit.svelte.dev/) - Web framework
+- [TypeScript](https://www.typescriptlang.org/) - Programming language
 
-## 📞 Suporte
+## 📞 Support
 
 - 📧 Email: <contact@devzolo.com>
 - 🐛 Issues: [GitHub Issues](https://github.com/devzolo/ts-api-core/issues)
-- 💬 Discussões: [GitHub Discussions](https://github.com/devzolo/ts-api-core/discussions)
+- 💬 Discussions: [GitHub Discussions](https://github.com/devzolo/ts-api-core/discussions)
 
 ---
 
-Feito com ❤️ por [devzolo](https://github.com/devzolo)
+Made with ❤️ by [devzolo](https://github.com/devzolo)
