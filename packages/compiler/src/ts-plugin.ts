@@ -6,7 +6,7 @@ import { loadPluginConfig } from "./plugin-config.ts";
 export default function openAPIPlugin(
 	program: ts.Program,
 	options: OpenAPIPluginOptions = {},
-) {
+): (program: ts.Program) => void {
 	const plugin = createOpenAPIPlugin(options);
 	return plugin;
 }

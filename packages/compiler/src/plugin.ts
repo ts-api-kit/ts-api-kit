@@ -1,6 +1,7 @@
 import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import process from "node:process";
 import { OpenAPIBuilder, type OperationMethod } from "@ts-api-kit/core/openapi";
 import { readParameterJSDoc } from "@ts-api-kit/core/utils";
 import * as ts from "typescript";
@@ -355,7 +356,9 @@ export class OpenAPIPlugin {
 }
 
 // Plugin factory function for TypeScript
-export function createOpenAPIPlugin(options: OpenAPIPluginOptions = {}) {
+export function createOpenAPIPlugin(
+	options: OpenAPIPluginOptions = {},
+): (program: ts.Program) => void {
 	return (program: ts.Program) => {
 		const plugin = new OpenAPIPlugin(program, options);
 		plugin.generateOpenAPI();

@@ -63,7 +63,7 @@ export function loadConfig(configPath?: string): TSAPIConfig {
 export function saveConfig(
 	config: TSAPIConfig,
 	configPath: string = "./ts-api-compiler.config.json",
-) {
+): void {
 	try {
 		fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 		console.log(`✅ Configuração salva em: ${configPath}`);
@@ -75,7 +75,7 @@ export function saveConfig(
 
 export function createDefaultConfig(
 	configPath: string = "./ts-api-compiler.config.json",
-) {
+): TSAPIConfig {
 	const defaultConfig: TSAPIConfig = {
 		output: "./openapi.json",
 		title: "API Documentation",

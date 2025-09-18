@@ -883,7 +883,7 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
 }
 
 // Simple OpenAPI generator that doesn't depend on complex imports
-function generateOpenAPI(projectPath: string, outputPath: string) {
+function generateOpenAPI(projectPath: string, outputPath: string): void {
 	console.log(`Loading TypeScript project from: ${projectPath}`);
 	console.log(`Output will be written to: ${outputPath}`);
 

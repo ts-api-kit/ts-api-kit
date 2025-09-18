@@ -84,7 +84,7 @@ export type RouteMeta = {
 
 const ROUTES: RouteMeta[] = [];
 
-export function registerRoute(meta: RouteMeta) {
+export function registerRoute(meta: RouteMeta): void {
 	// Atualiza rota existente ou adiciona nova
 	const key = `${meta.method} ${meta.path}`;
 	const existingIndex = ROUTES.findIndex(
@@ -97,7 +97,7 @@ export function registerRoute(meta: RouteMeta) {
 	}
 }
 
-function toOpenAPIPath(honoPath: string) {
+function toOpenAPIPath(honoPath: string): string {
 	return honoPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
 }
 
@@ -133,7 +133,7 @@ export function lazyRegister(
 		externalDocs?: { url: string; description?: string };
 		filePath?: string;
 	},
-) {
+): void {
 	// Convert to OpenAPI path format
 	const openapiPath = toOpenAPIPath(path);
 

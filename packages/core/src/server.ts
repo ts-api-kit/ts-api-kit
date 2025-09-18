@@ -177,7 +177,7 @@ export const json = <T>(data: T, init?: ResponseInit): Response =>
 export const typedJson = <T extends RouteSpec, S extends number = 200>(
 	data: ResponseForStatus<T, S>,
 	init?: ResponseInit,
-) =>
+): Response =>
 	new Response(JSON.stringify(data), {
 		headers: { "Content-Type": "application/json" },
 		...init,
@@ -1147,7 +1147,7 @@ export default class Server {
 		this.port = port ?? this.port;
 	}
 
-	private async setupApp() {
+	private async setupApp(): Promise<void> {
 		this.app.use("*", async (c, next) => {
 			c.res.headers.set("x-powered-by", "hono-file-router");
 			await next();
@@ -1225,12 +1225,15 @@ export default class Server {
 		});
 	}
 
-	async configureRoutes(routesDir: string = "./src/routes", basePath = "") {
+	async configureRoutes(
+		routesDir: string = "./src/routes",
+		basePath = "",
+	): Promise<void> {
 		await this.setupApp();
 		await mountFileRouter(this.app, { routesDir, basePath });
 	}
 
-	start(port?: number) {
+	start(port?: number): void {
 		const finalPort = port ?? this.port;
 		console.log(
 			`🚀 Listening on http://localhost:${finalPort}  •  Docs: http://localhost:${finalPort}/docs`,

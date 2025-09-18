@@ -261,16 +261,16 @@ export class OpenAPIBuilder {
 		};
 	}
 
-	addTag(name: string, description?: string) {
+	addTag(name: string, description?: string): void {
 		const exists = (this.doc.tags as any[]).some((t) => t.name === name);
 		if (!exists) (this.doc.tags as any[]).push({ name, description });
 	}
 
-	private ensurePath(path: string) {
+	private ensurePath(path: string): void {
 		if (!this.paths[path]) this.paths[path] = {};
 	}
 
-	addOperation(op: OperationConfig) {
+	addOperation(op: OperationConfig): void {
 		this.ensurePath(op.path);
 		const method = op.method.toLowerCase();
 
