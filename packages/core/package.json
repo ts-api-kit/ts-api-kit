@@ -1,6 +1,6 @@
 {
   "name": "@ts-api-kit/core",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot",
   "type": "module",
   "main": "./dist/index.js",
