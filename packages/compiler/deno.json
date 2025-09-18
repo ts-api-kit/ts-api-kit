@@ -1,0 +1,61 @@
+{
+  "name": "@ts-api-kit/compiler",
+  "version": "0.1.3",
+  "description": "TypeScript plugin for automatically generating OpenAPI.json files from TypeScript routes. Provides intelligent type analysis and schema generation for your API documentation.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "bin": {
+    "ts-api-compiler": "./src/cli.ts"
+  },
+  "imports": {
+    "@hono/node-server": "npm:@hono/node-server@^1.11.3",
+    "@scalar/hono-api-reference": "npm:@scalar/hono-api-reference@^0.9.16",
+    "@standard-schema/spec": "npm:@standard-schema/spec@^1.0.0",
+    "@valibot/to-json-schema": "npm:@valibot/to-json-schema@^1.3.0",
+    "chokidar": "npm:chokidar@^3.6.0",
+    "commander": "npm:commander@^14.0.0",
+    "fast-glob": "npm:fast-glob@^3.3.2",
+    "hono": "npm:hono@^4.6.7",
+    "pathe": "npm:pathe@^2.0.3",
+    "ts-morph": "npm:ts-morph@^27.0.0",
+    "@ts-api-kit/core": "jsr:@ts-api-kit/core@^0.1.0"
+  },
+  "peerDependencies": {
+    "@kitajs/html": "npm:@kitajs/html@^4.2.9"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "typescript",
+    "openapi",
+    "compiler",
+    "plugin",
+    "api",
+    "documentation",
+    "generator"
+  ],
+  "author": "devzolo <contact@devzolo.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ts-api-kit/ts-api-kit.git",
+    "directory": "packages/ts-api-compiler"
+  },
+  "homepage": "https://github.com/ts-api-kit/ts-api-kit#readme",
+  "bugs": {
+    "url": "https://github.com/ts-api-kit/ts-api-kit/issues"
+  },
+  "runtimes": {
+    "deno": "1.0.0",
+    "node": "18.0.0"
+  },
+  "compatibility": {
+    "deno": "1.0.0",
+    "node": "18.0.0"
+  }
+}

@@ -1,10 +1,10 @@
-import type { RouteJSDocOA } from "./jsdoc-extractor";
+import type { RouteJSDocOA } from "./jsdoc-extractor.ts";
 
 export function mergeOpenAPI(
 	jsdocOA: RouteJSDocOA,
 	cfgOA: any,
 	inferred: { method?: string; path?: string },
-) {
+): any {
 	const out: any = { ...jsdocOA };
 
 	// Only override with config values if they exist

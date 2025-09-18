@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Main entry point for @ts-api-kit/compiler
+ *
+ * This module provides TypeScript compiler functionality for:
+ * - OpenAPI schema generation from TypeScript types
+ * - Type analysis and introspection
+ * - Component registry management
+ * - TypeScript AST manipulation
+ *
+ * @module
+ */
+
+import console from "node:console";
 import { Project, type Type, ts } from "ts-morph";
 
 type OA =
@@ -362,7 +375,7 @@ function toOpenApi(
 							seen,
 							shouldCreateComponentForArray,
 						);
-						properties[p.getName()] = { ...cleanType, nullable: true };
+						properties[p.getName()] = { ...cleanType, nullable: true } as any;
 					} else {
 						// Se tem múltiplos tipos não-undefined, usa o oneOf original mas marca como nullable
 						const nonUndefinedParts = nonUndefinedTypes.map((ut) =>

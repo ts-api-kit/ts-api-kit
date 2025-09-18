@@ -1,5 +1,19 @@
+/**
+ * @fileoverview Node.js loader for @ts-api-kit/core
+ *
+ * This module provides Node.js loader functionality for:
+ * - TypeScript file transpilation
+ * - JSX support with @kitajs/html
+ * - Module resolution for .ts/.tsx files
+ * - Source map generation
+ *
+ * @module
+ */
+
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import * as ts from "typescript";
 
@@ -54,7 +68,11 @@ function transpileTS(source: string, filename: string) {
 	return code;
 }
 
-export async function resolve(specifier: string, context: any, next: any) {
+export async function resolve(
+	specifier: string,
+	context: any,
+	next: any,
+): Promise<any> {
 	const res = await next(specifier, context);
 	if (res?.url?.startsWith("file:")) {
 		const ext = extname(new URL(res.url).pathname);
@@ -63,7 +81,7 @@ export async function resolve(specifier: string, context: any, next: any) {
 	return res;
 }
 
-export async function load(url: string, context: any, next: any) {
+export async function load(url: string, context: any, next: any): Promise<any> {
 	if (!url.startsWith("file:")) return next(url, context);
 	const filename = fileURLToPath(url);
 	const ext = extname(filename);

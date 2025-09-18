@@ -1,3 +1,4 @@
+import console from "node:console";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
 import type { Hono, MiddlewareHandler } from "hono";

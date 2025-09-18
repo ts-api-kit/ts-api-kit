@@ -12,5 +12,5 @@ export default function openAPIPlugin(
 }
 
 // Export for programmatic usage
-export { createOpenAPIPlugin, OpenAPIPluginOptions } from "./plugin";
-export { loadPluginConfig } from "./plugin-config";
+export { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
+export { loadPluginConfig } from "./plugin-config.ts";

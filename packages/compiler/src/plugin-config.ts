@@ -1,4 +1,5 @@
-import type { OpenAPIPluginOptions } from "./plugin";
+import console from "node:console";
+import type { OpenAPIPluginOptions } from "./plugin.ts";
 
 export interface PluginConfig {
 	openapi?: OpenAPIPluginOptions;

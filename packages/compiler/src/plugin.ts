@@ -1,3 +1,4 @@
+import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { OpenAPIBuilder, type OperationMethod } from "@ts-api-kit/core/openapi";

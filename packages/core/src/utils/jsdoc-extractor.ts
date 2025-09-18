@@ -8,7 +8,7 @@ export type RouteJSDocOA = {
 	deprecated?: boolean;
 	operationId?: string;
 	externalDocs?: { url: string; description?: string };
-	// Opcionalmente, você pode suportar @path e @method override (não recomendado):
+	// Optionally, you can support @path and @method override (not recommended):
 	path?: string;
 	method?: string;
 };
@@ -157,7 +157,7 @@ function parseParameterJSDocBlock(block: string): ParameterJSDoc {
 		} else if (line.startsWith("@example")) {
 			out.example = line.replace("@example", "").trim();
 		} else if (!line.startsWith("@")) {
-			// Se não começa com @, é descrição livre
+			// If it doesn't start with @, it's free description
 			if (!out.description) {
 				const { text, end } = collectMultiline(i, line);
 				out.description = text;

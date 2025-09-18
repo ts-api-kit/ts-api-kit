@@ -1,8 +1,21 @@
 #!/usr/bin/env node
 
+/**
+ * @fileoverview CLI interface for @ts-api-kit/compiler
+ *
+ * This module provides command-line interface functionality for:
+ * - OpenAPI generation from TypeScript files
+ * - Configuration management
+ * - File processing and output generation
+ * - Plugin system integration
+ *
+ * @module
+ */
+
+import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
-
+import process from "node:process";
 import { Command } from "commander";
 import type { OpenAPIPluginOptions } from "./plugin.ts";
 import { generateOpenAPI } from "./simple-generator.ts";
@@ -386,7 +399,7 @@ function extractHTTPMethods(content: string): string[] {
 // Exportar função generateOpenAPI para uso em outros módulos
 export { generateOpenAPI };
 
-// Executar CLI se chamado diretamente
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Execute CLI if called directly
+if (process.argv[1]?.endsWith("cli.ts")) {
 	program.parse();
 }

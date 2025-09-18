@@ -1,4 +1,6 @@
 // Lightweight OpenAPI builder focused on route-level metadata + valibot schemas
+
+import console from "node:console";
 import type * as v from "valibot";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
 import type { response } from "./markers.ts";
@@ -344,7 +346,7 @@ export class OpenAPIBuilder {
 		};
 	}
 
-	toJSON() {
+	toJSON(): any {
 		return this.doc;
 	}
 }

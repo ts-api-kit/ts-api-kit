@@ -1,11 +1,26 @@
+/**
+ * @fileoverview Server utilities and helpers for @ts-api-kit/core
+ *
+ * This module provides server-side functionality including:
+ * - HTTP method handlers (GET, POST, PUT, PATCH, DELETE, etc.)
+ * - Request/response utilities
+ * - Error handling
+ * - JSX rendering support
+ * - Type-safe schema validation
+ *
+ * @module
+ */
+
+import console from "node:console";
 import { serve } from "@hono/node-server";
 import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Context } from "hono";
+import type { Context,MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
 import { stream } from "hono/streaming";
+import type { ResponseInit } from "undici-types";
 import { mountFileRouter } from "./file-router.ts";
 import type { response } from "./openapi/markers.ts";
 import {
@@ -32,30 +47,75 @@ export class AppError extends Error {
 	}
 }
 
+/**
+ * Throws an application error with the specified code, message, and optional metadata.
+ *
+ * @param code - HTTP status code for the error
+ * @param message - Error message
+ * @param meta - Optional metadata to include with the error
+ * @throws {AppError} Always throws an AppError
+ *
+ * @example
+ * ```typescript
+ * error(404, "User not found", { userId: 123 });
+ * ```
+ */
 export const error = (
 	code: number,
 	message: string,
 	meta?: Record<string, unknown>,
-) => {
+): never => {
 	throw new AppError(code, message, meta);
 };
 
 let currentContext: Context | null = null;
 let currentFilePath: string | null = null;
 
-export const setRequestContext = (c: Context) => {
+/**
+ * Sets the current request context for the application.
+ * This is used internally to track the current Hono context.
+ *
+ * @param c - The Hono context to set as current
+ */
+export const setRequestContext = (c: Context): void => {
 	currentContext = c;
 };
 
-export const setCurrentFilePath = (filePath: string) => {
+/**
+ * Sets the current file path being processed.
+ * This is used for tracking which route file is currently being executed.
+ *
+ * @param filePath - The file path to set as current
+ */
+export const setCurrentFilePath = (filePath: string): void => {
 	currentFilePath = filePath;
 };
 
-export const getCurrentFilePath = () => {
+/**
+ * Gets the current file path being processed.
+ *
+ * @returns The current file path or null if not set
+ */
+export const getCurrentFilePath = (): string | null => {
 	return currentFilePath;
 };
 
-export const getRequestEvent = () => {
+/**
+ * Gets the current request event with cookies, headers, and other request data.
+ *
+ * @returns The current request event object
+ */
+export const getRequestEvent = (): {
+	rid: MiddlewareHandler;
+	cookies: {
+		get: (name: string) => string | undefined;
+		set: (name: string, value: string) => void;
+	};
+	locals: { title: string };
+	headers?: Record<string, string>;
+	url?: string;
+	method?: string;
+} => {
 	const rid = requestId();
 	if (!currentContext) {
 		return {
@@ -87,7 +147,20 @@ export const getRequestEvent = () => {
 	} as const;
 };
 
-export const json = <T>(data: T, init?: ResponseInit) =>
+Response;
+/**
+ * Creates a JSON response with the provided data.
+ *
+ * @param data - The data to serialize as JSON
+ * @param init - Optional ResponseInit options
+ * @returns A Response object with JSON content
+ *
+ * @example
+ * ```typescript
+ * return json({ message: "Hello World" });
+ * ```
+ */
+export const json = <T>(data: T, init?: ResponseInit): Response =>
 	new Response(JSON.stringify(data), {
 		headers: { "Content-Type": "application/json" },
 		...init,
@@ -222,7 +295,18 @@ export interface ResponseTools<T extends RouteSpec> {
 	) => Response;
 }
 
-export const jsx = async (element: any) => {
+/**
+ * Renders JSX elements to HTML and returns a Response.
+ *
+ * @param element - The JSX element to render
+ * @returns A Promise that resolves to a Response with HTML content
+ *
+ * @example
+ * ```typescript
+ * return jsx(<div>Hello World</div>);
+ * ```
+ */
+export const jsx = async (element: any): Promise<Response> => {
 	let html: string;
 
 	if (typeof element === "string") {
@@ -437,7 +521,7 @@ export const createResponseTools = <
 
 export const jsxStream = (
 	html: (rid: number | string) => string | Promise<string>,
-) => {
+): Response => {
 	if (!currentContext) {
 		throw new Error("jsxStream must be called within a request context");
 	}
@@ -462,7 +546,7 @@ export const jsxStream = (
 export const jsxStreamHono = (
 	c: Context<any, any, {}>,
 	html: (rid: number | string) => string | Promise<string>,
-) => {
+): Response => {
 	c.header("Content-Type", "text/html; charset=utf-8");
 	const htmlStream = renderToStream(html);
 	return stream(c, async (stream) => {
@@ -728,7 +812,7 @@ export function createHandler<T extends RouteSpec>(
 	handler: (
 		context: HandlerContext<NonNullable<T>>,
 	) => unknown | Promise<unknown>,
-) {
+): (c: Context) => Promise<Response> {
 	let registered = false;
 	return async (c: Context) => {
 		try {
@@ -849,7 +933,22 @@ export function createHandler<T extends RouteSpec>(
 	};
 }
 
-export function createSchema<T extends SchemaDefinition>(schema: T) {
+export function createSchema<T extends SchemaDefinition>(
+	schema: T,
+): T & {
+	getStandardSchema(): {
+		query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
+		params?: StandardSchemaV1<
+			InferInput<T["params"]>,
+			InferOutput<T["params"]>
+		>;
+		headers?: StandardSchemaV1<
+			InferInput<T["headers"]>,
+			InferOutput<T["headers"]>
+		>;
+		body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
+	};
+} {
 	return {
 		...schema,
 		getStandardSchema(): {
@@ -891,13 +990,40 @@ export function createSchema<T extends SchemaDefinition>(schema: T) {
 	};
 }
 
-export const get = createHandler<RouteSpec>;
-export const post = createHandler<RouteSpec>;
-export const put = createHandler<RouteSpec>;
-export const patch = createHandler<RouteSpec>;
-export const del = createHandler<RouteSpec>;
-export const options = createHandler<RouteSpec>;
-export const head = createHandler<RouteSpec>;
+/**
+ * Creates a GET route handler with type-safe request/response validation.
+ */
+export const get: any = createHandler<RouteSpec>;
+
+/**
+ * Creates a POST route handler with type-safe request/response validation.
+ */
+export const post: any = createHandler<RouteSpec>;
+
+/**
+ * Creates a PUT route handler with type-safe request/response validation.
+ */
+export const put: any = createHandler<RouteSpec>;
+
+/**
+ * Creates a PATCH route handler with type-safe request/response validation.
+ */
+export const patch: any = createHandler<RouteSpec>;
+
+/**
+ * Creates a DELETE route handler with type-safe request/response validation.
+ */
+export const del: any = createHandler<RouteSpec>;
+
+/**
+ * Creates an OPTIONS route handler with type-safe request/response validation.
+ */
+export const options: any = createHandler<RouteSpec>;
+
+/**
+ * Creates a HEAD route handler with type-safe request/response validation.
+ */
+export const head: any = createHandler<RouteSpec>;
 
 export function handle<T extends RouteSpec = {}>(
 	specOrHandler:

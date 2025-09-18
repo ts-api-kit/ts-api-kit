@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import process from "node:process";
 import * as ts from "typescript";
 import { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
 
@@ -124,6 +126,6 @@ function main() {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.endsWith("generate-openapi.ts")) {
 	main();
 }

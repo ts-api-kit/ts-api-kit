@@ -1,9 +1,15 @@
 // Central registry for operations -> OpenAPI doc
 
+import console from "node:console";
 import { OpenAPIBuilder, type OperationConfig } from "./builder.ts";
 import { response } from "./index.ts";
 
-export const openapi = new OpenAPIBuilder({
+
+/**
+ * The main OpenAPI builder instance for the application.
+ * This instance is used to register operations and generate OpenAPI documentation.
+ */
+export const openapi: OpenAPIBuilder = new OpenAPIBuilder({
 	title: "My API",
 	version: "1.0.0",
 	description: "Auto-generated from route files with Valibot validation",
@@ -14,7 +20,12 @@ export const openapi = new OpenAPIBuilder({
 });
 
 // helper to register a route's operation
-export const register = (op: OperationConfig) => {
+/**
+ * Registers an operation with the OpenAPI builder.
+ * 
+ * @param op - The operation configuration to register
+ */
+export const register = (op: OperationConfig): void => {
 	console.log("Registering operation with filePath:", op.filePath);
 	// optional: automatically add tags
 	op.tags?.forEach((t) => {
@@ -23,7 +34,12 @@ export const register = (op: OperationConfig) => {
 	openapi.addOperation(op);
 };
 
-export const getOpenApiJson = () => openapi.toJSON();
+/**
+ * Gets the current OpenAPI specification as JSON.
+ * 
+ * @returns The OpenAPI specification object
+ */
+export const getOpenApiJson = (): any => openapi.toJSON();
 
 // Legacy compatibility - keep existing functions for backward compatibility
 export type AnySchema = any;
@@ -85,12 +101,18 @@ function toOpenAPIPath(honoPath: string) {
 	return honoPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
 }
 
+/**
+ * Builds an OpenAPI document with the specified options.
+ * 
+ * @param _opts - Configuration options for the OpenAPI document
+ * @returns The generated OpenAPI document
+ */
 export function buildOpenAPIDocument(_opts: {
 	title: string;
 	version: string;
 	servers?: { url: string; description?: string }[];
 	securitySchemes?: Record<string, any>;
-}) {
+}): any {
 	// Use the new builder for enhanced OpenAPI generation
 	return getOpenApiJson();
 }

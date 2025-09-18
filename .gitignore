@@ -141,3 +141,5 @@ vite.config.ts.timestamp-*
 .vite/
 
 .nx
+# JSR Token
+JSR_TOKEN

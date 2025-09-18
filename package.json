@@ -2,6 +2,7 @@
   "name": "workspace",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "dist",
   "author": "devzolo <contact@devzolo.com>",
   "license": "MIT",
@@ -24,7 +25,11 @@
     "format": "nx run-many -t format",
     "format:fix": "nx run-many -t format:fix",
     "test": "nx run-many -t test",
-    "check": "nx run-many -t check"
+    "check": "nx run-many -t check",
+    "setup:github-actions": "node scripts/setup-github-actions.js",
+    "publish:jsr": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec jsr publish --allow-slow-types",
+    "publish:core": "cd packages/core && npx jsr publish --allow-slow-types",
+    "publish:compiler": "cd packages/compiler && npx jsr publish --allow-slow-types"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.2",
