@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
-import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
+import { createLogger } from "@ts-api-kit/core/utils";
 import * as ts from "typescript";
+
+const log = createLogger("compiler:generator");
 
 // Function to process a route file and extract HTTP operations
 function processRouteFile(
@@ -32,7 +34,7 @@ function processRouteFile(
 							"HEAD",
 						].includes(name)
 					) {
-						console.log(`Found ${name} export in ${sourceFile.fileName}`);
+						log.debug(`Found ${name} export in ${sourceFile.fileName}`);
 
 						// Extract JSDoc comments
 						const jsdoc = extractJSDocFromNode(declaration);
@@ -116,7 +118,7 @@ function extractResponsesFromHandle(
 							openapiProperty.initializer,
 						);
 
-						if (openapiConfig && openapiConfig.responses) {
+						if (openapiConfig?.responses) {
 							// Process each response
 							for (const [code, response] of Object.entries(
 								openapiConfig.responses,
@@ -891,8 +893,8 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
  * @param outputPath - Destination for the generated OpenAPI JSON file
  */
 function generateOpenAPI(projectPath: string, outputPath: string): void {
-	console.log(`Loading TypeScript project from: ${projectPath}`);
-	console.log(`Output will be written to: ${outputPath}`);
+	log.debug(`Loading TypeScript project from: ${projectPath}`);
+	log.debug(`Output will be written to: ${outputPath}`);
 
 	try {
 		// Read tsconfig.json to get the include patterns
@@ -933,7 +935,7 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 		};
 
 		// Process source files
-		console.log(`Found ${sourceFiles.length} source files`);
+		log.debug(`Found ${sourceFiles.length} source files`);
 
 		for (const sourceFile of sourceFiles) {
 			if (sourceFile.isDeclarationFile) continue;
@@ -948,7 +950,7 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 			}
 
 			const relativePath = path.relative(process.cwd(), fileName);
-			console.log(`Processing route file: ${relativePath}`);
+			log.debug(`Processing route file: ${relativePath}`);
 
 			// Derive path from filename (remove src/ and routes/ directories)
 			const pathParts = relativePath.split(path.sep);
@@ -970,28 +972,27 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 				openapiPath = "/";
 			}
 
-			console.log(`Derived OpenAPI path: ${openapiPath}`);
+			log.debug(`Derived OpenAPI path: ${openapiPath}`);
 
 			// Process the source file to find exported HTTP methods
 			const operations = processRouteFile(sourceFile, checker);
 
 			if (Object.keys(operations).length > 0) {
 				openapiSpec.paths[openapiPath] = operations;
-				console.log(`Added operations for path: ${openapiPath}`);
+				log.debug(`Added operations for path: ${openapiPath}`);
 			} else {
-				console.log(`No operations found for path: ${openapiPath}`);
+				log.debug(`No operations found for path: ${openapiPath}`);
 			}
 		}
 
 		// Write the generated OpenAPI spec to file
 		fs.writeFileSync(outputPath, JSON.stringify(openapiSpec, null, 2));
-		console.log(`✅ OpenAPI specification generated: ${outputPath}`);
+		log.info(`✅ OpenAPI specification generated: ${outputPath}`);
 	} catch (error) {
-		console.error("❌ Error generating OpenAPI specification:", error);
+		log.error("❌ Error generating OpenAPI specification:", error);
 		process.exit(1);
 	}
 }
 
 // Exportar função para uso em outros módulos
 export { generateOpenAPI };
-
