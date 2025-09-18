@@ -1,7 +1,11 @@
 import { generateOpenAPI } from "@ts-api-kit/compiler";
 import ApiServer from "@ts-api-kit/core/server";
 
-const server = new ApiServer(3000);
-await server.configureRoutes(`${import.meta.dirname}/routes`);
-generateOpenAPI(`${import.meta.dirname}/routes`, "./openapi.json");
-server.start();
+const port = 3000;
+const routesDir = `${import.meta.dirname}/routes`;
+const openapiFile = `./openapi.json`;
+
+const server = new ApiServer();
+await server.configureRoutes(routesDir);
+generateOpenAPI(routesDir, openapiFile);
+server.start(port);
