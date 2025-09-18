@@ -1291,6 +1291,8 @@ export default class Server {
 	): Promise<void> {
 		await this.setupApp();
 		await mountFileRouter(this.app, { routesDir, basePath });
+		// const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
+		// generateOpenAPI(routesDir, "openapi.json");
 	}
 
 	start(port?: number): void {

@@ -1,0 +1,31 @@
+{
+  "name": "simple-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "cd ../../ && biome check examples/simple-example",
+    "lint:fix": "cd ../../ && biome check examples/simple-example --write",
+    "format": "cd ../../ && biome format examples/simple-example",
+    "format:fix": "cd ../../ && biome format examples/simple-example --write",
+    "check": "tsgo --skipLibCheck"
+  },
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "dependencies": {
+    "@kitajs/html": "^4.2.9",
+    "hono": "^4.9.6",
+    "@ts-api-kit/compiler": "workspace:*",
+    "@ts-api-kit/core": "workspace:*",
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}

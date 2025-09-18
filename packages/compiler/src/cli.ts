@@ -18,7 +18,7 @@ import * as path from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import type { OpenAPIPluginOptions } from "./plugin.ts";
-import { generateOpenAPI } from "./simple-generator.ts";
+import { generateOpenAPI } from "./openapi-generator.ts";
 
 const program = new Command();
 

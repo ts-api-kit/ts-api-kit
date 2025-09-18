@@ -70,7 +70,8 @@
     "fast-glob": "^3.3.2",
     "hono": "^4.6.7",
     "pathe": "^2.0.3",
-    "valibot": "^1.1.0"
+    "valibot": "^1.1.0",
+    "typescript": "^5.6.2"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",
