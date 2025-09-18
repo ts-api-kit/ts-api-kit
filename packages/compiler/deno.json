@@ -1,6 +1,6 @@
 {
   "name": "@ts-api-kit/compiler",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "TypeScript plugin for automatically generating OpenAPI.json files from TypeScript routes. Provides intelligent type analysis and schema generation for your API documentation.",
   "exports": {
     ".": "./src/index.ts",
