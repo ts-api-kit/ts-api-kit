@@ -6,14 +6,42 @@ import process from "node:process";
 import { createLogger } from "@ts-api-kit/core/utils";
 import * as ts from "typescript";
 
+type Json = Record<string, unknown> | Json[] | string | number | boolean | null;
+
+type MediaTypeObject = { schema: Json; example?: unknown };
+type ParameterObject = {
+    name: string;
+    in: "query" | "path" | "header";
+    required?: boolean;
+    schema?: Json;
+    description?: string;
+    example?: unknown;
+};
+type ResponseObject = {
+    description?: string;
+    content?: Record<string, MediaTypeObject>;
+};
+type Operation = {
+    summary?: string;
+    description?: string;
+    tags?: string[];
+    deprecated?: boolean;
+    operationId?: string;
+    externalDocs?: { url: string; description?: string };
+    parameters?: ParameterObject[];
+    responses?: Record<string, ResponseObject>;
+    requestBody?: { required?: boolean; content: Record<string, MediaTypeObject> };
+};
+type OperationMap = Record<string, Operation>;
+
 const log = createLogger("compiler:generator");
 
 // Function to process a route file and extract HTTP operations
 function processRouteFile(
-	sourceFile: ts.SourceFile,
-	checker: ts.TypeChecker,
-): any {
-	const operations: any = {};
+    sourceFile: ts.SourceFile,
+    checker: ts.TypeChecker,
+): OperationMap {
+    const operations: OperationMap = {};
 
 	// Walk through the AST to find exported variables
 	function visit(node: ts.Node) {
@@ -80,10 +108,10 @@ function processRouteFile(
 
 // Function to extract responses from handle call
 function extractResponsesFromHandle(
-	declaration: ts.VariableDeclaration,
-	checker: ts.TypeChecker,
-): any {
-	const responses: any = {};
+    declaration: ts.VariableDeclaration,
+    checker: ts.TypeChecker,
+): Record<string, ResponseObject> {
+    const responses: Record<string, ResponseObject> = {};
 
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
@@ -130,16 +158,20 @@ function extractResponsesFromHandle(
 									checker,
 								);
 
-								const responseObj = response as any;
-								responses[code] = {
-									description: responseObj.description || "Response",
-									content: {
-										[responseObj.contentType || "application/json"]: {
-											schema: responseType,
-											example: responseObj.examples,
-										},
-									},
-								};
+                            const responseObj = response as Partial<{
+                                description: string;
+                                contentType: string;
+                                examples: unknown;
+                            }>;
+                            responses[code] = {
+                                description: responseObj?.description || "Response",
+                                content: {
+                                    [responseObj?.contentType || "application/json"]: {
+                                        schema: responseType,
+                                        example: responseObj?.examples,
+                                    },
+                                },
+                            };
 							}
 						}
 					}
@@ -153,10 +185,10 @@ function extractResponsesFromHandle(
 
 // Function to extract parameters from handle call
 function extractParametersFromHandle(
-	declaration: ts.VariableDeclaration,
-	checker: ts.TypeChecker,
-): any[] {
-	const parameters: any[] = [];
+    declaration: ts.VariableDeclaration,
+    checker: ts.TypeChecker,
+): ParameterObject[] {
+    const parameters: ParameterObject[] = [];
 
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
@@ -204,10 +236,10 @@ function extractParametersFromHandle(
 
 // Function to extract query parameters from valibot schema
 function extractQueryParameters(
-	openapiExpression: ts.Expression,
-	checker: ts.TypeChecker,
-): any[] {
-	const parameters: any[] = [];
+    openapiExpression: ts.Expression,
+    checker: ts.TypeChecker,
+): ParameterObject[] {
+    const parameters: ParameterObject[] = [];
 
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return parameters;
@@ -287,9 +319,9 @@ function extractQueryParameters(
 
 // Function to extract request body from handle call
 function extractRequestBodyFromHandle(
-	declaration: ts.VariableDeclaration,
-	checker: ts.TypeChecker,
-): any | null {
+    declaration: ts.VariableDeclaration,
+    checker: ts.TypeChecker,
+): Operation["requestBody"] | null {
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
 		return null;
@@ -331,9 +363,9 @@ function extractRequestBodyFromHandle(
 
 // Function to extract request body from valibot schema
 function extractRequestBody(
-	openapiExpression: ts.Expression,
-	checker: ts.TypeChecker,
-): any | null {
+    openapiExpression: ts.Expression,
+    checker: ts.TypeChecker,
+): Operation["requestBody"] | null {
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return null;
 	}
@@ -398,21 +430,27 @@ function extractRequestBody(
 
 	return {
 		required: true,
-		content: {
-			[contentType]: {
-				schema: schema,
-				description: jsdoc.description,
-				example: jsdoc.example,
-			},
-		},
+            content: {
+                [contentType]: {
+                    schema: schema,
+                    example: jsdoc.example,
+                },
+            },
 	};
 }
 
 // Function to extract parameter information from valibot property
+type ExtractedParamInfo = {
+    required: boolean;
+    schema: Json;
+    description?: string;
+    example?: string;
+};
+
 function extractParameterInfo(
-	property: ts.PropertyAssignment,
-	checker: ts.TypeChecker,
-): any {
+    property: ts.PropertyAssignment,
+    checker: ts.TypeChecker,
+): ExtractedParamInfo | null {
 	const name = getPropertyName(property.name);
 	if (!name) return null;
 
@@ -431,19 +469,19 @@ function extractParameterInfo(
 		property.initializer.expression.expression.text === "v" &&
 		property.initializer.expression.name.text === "optional";
 
-	return {
-		required: !isOptional,
-		schema: schema,
-		description: jsdoc.description,
-		example: jsdoc.example,
-	};
+    return {
+        required: !isOptional,
+        schema: schema,
+        description: jsdoc.description,
+        example: jsdoc.example,
+    };
 }
 
 // Function to extract valibot schema information
 function extractValibotSchema(
-	expression: ts.Expression,
-	checker: ts.TypeChecker,
-): any {
+    expression: ts.Expression,
+    checker: ts.TypeChecker,
+): Json {
 	if (ts.isCallExpression(expression)) {
 		const callExpression = expression.expression;
 
@@ -466,19 +504,19 @@ function extractValibotSchema(
 							const elementType = extractValibotSchema(arrayArgs[0], checker);
 							return {
 								type: "array",
-								items: elementType || { type: "any" },
-							};
-						}
-						return { type: "array", items: { type: "any" } };
-					}
-					case "object": {
+                        items: elementType || { type: "unknown" },
+                    };
+                }
+                return { type: "array", items: { type: "unknown" } };
+            }
+            case "object": {
 						// Handle v.object() - extract the properties
 						const objectArgs = expression.arguments;
 						if (
 							objectArgs.length > 0 &&
 							ts.isObjectLiteralExpression(objectArgs[0])
 						) {
-							const properties: any = {};
+                    const properties: Record<string, Json> = {};
 							const required: string[] = [];
 
 							for (const property of objectArgs[0].properties) {
@@ -555,25 +593,25 @@ function extractValibotSchema(
 }
 
 // Helper function to extract object literal values
-function extractObjectLiteralValue(expression: ts.Expression): any {
-	if (!ts.isObjectLiteralExpression(expression)) {
-		return null;
-	}
+function extractObjectLiteralValue(expression: ts.Expression): Record<string, Json> | null {
+    if (!ts.isObjectLiteralExpression(expression)) {
+        return null;
+    }
 
-	const result: any = {};
+    const result: Record<string, Json> = {};
 
 	for (const property of expression.properties) {
 		if (!ts.isPropertyAssignment(property)) continue;
 
-		const name = getPropertyName(property.name);
-		if (!name) continue;
+        const name = getPropertyName(property.name);
+        if (!name) continue;
 
-		const value = extractValue(property.initializer);
-		if (value !== null) {
-			result[name] = value;
-		}
-	}
-	return result;
+        const value = extractValue(property.initializer);
+        if (value !== null) {
+            result[name] = value;
+        }
+    }
+    return result;
 }
 
 // Helper function to get property name
@@ -589,7 +627,7 @@ function getPropertyName(name: ts.PropertyName): string | null {
 }
 
 // Helper function to extract values
-function extractValue(expression: ts.Expression): any {
+function extractValue(expression: ts.Expression): Json | null {
 	if (ts.isStringLiteral(expression)) {
 		return expression.text;
 	} else if (ts.isNumericLiteral(expression)) {
@@ -600,22 +638,25 @@ function extractValue(expression: ts.Expression): any {
 		return false;
 	} else if (expression.kind === ts.SyntaxKind.NullKeyword) {
 		return null;
-	} else if (ts.isArrayLiteralExpression(expression)) {
-		return expression.elements
-			.map((el) => extractValue(el))
-			.filter((v) => v !== null);
-	} else if (ts.isObjectLiteralExpression(expression)) {
-		return extractObjectLiteralValue(expression);
-	} else if (ts.isCallExpression(expression)) {
-		// Handle response.of() calls
-		return extractResponseOf(expression);
-	}
+    } else if (ts.isArrayLiteralExpression(expression)) {
+        const arr: Json[] = [];
+        for (const el of expression.elements) {
+            const v = extractValue(el);
+            if (v !== null) arr.push(v);
+        }
+        return arr;
+    } else if (ts.isObjectLiteralExpression(expression)) {
+        return extractObjectLiteralValue(expression);
+    } else if (ts.isCallExpression(expression)) {
+        // Handle response.of() calls
+        return extractResponseOf(expression) as unknown as Json;
+    }
 
 	return null;
 }
 
 // Helper function to extract response.of() calls
-function extractResponseOf(callExpression: ts.CallExpression): any {
+function extractResponseOf(callExpression: ts.CallExpression): Record<string, Json> | null {
 	const expression = callExpression.expression;
 
 	if (!ts.isPropertyAccessExpression(expression)) {
@@ -635,21 +676,21 @@ function extractResponseOf(callExpression: ts.CallExpression): any {
 		}
 
 		// Return basic response marker if no metadata provided
-		return {
-			description: "Response",
-			contentType: "application/json",
-		};
-	}
+        return {
+            description: "Response",
+            contentType: "application/json",
+        };
+    }
 
-	return null;
+    return null;
 }
 
 // Function to extract response type from response marker
 function extractResponseTypeFromMarker(
-	openapiExpression: ts.Expression,
-	responseCode: string,
-	checker: ts.TypeChecker,
-): any {
+    openapiExpression: ts.Expression,
+    responseCode: string,
+    checker: ts.TypeChecker,
+): Json {
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return {};
 	}
@@ -705,25 +746,25 @@ function extractResponseTypeFromMarker(
 		return {};
 	}
 
-	const typeArg = typeArgs[0];
-	const type = checker.getTypeAtLocation(typeArg);
+    const typeArg = typeArgs[0];
+    const type = checker.getTypeAtLocation(typeArg);
 
 	// Convert TypeScript type to JSON Schema
-	return convertTypeToJsonSchema(type, checker);
+    return convertTypeToJsonSchema(type, checker);
 }
 
 // Function to extract JSDoc comments from a node
 function extractJSDocFromNode(node: ts.Node): {
-	summary?: string;
-	description?: string;
-	tags?: string[];
-	deprecated?: boolean;
-	operationId?: string;
-	externalDocs?: { url: string; description?: string };
-	example?: string;
+    summary?: string;
+    description?: string;
+    tags?: string[];
+    deprecated?: boolean;
+    operationId?: string;
+    externalDocs?: { url: string; description?: string };
+    example?: string;
 } {
-	const jsDocTags = ts.getJSDocTags(node);
-	const result: any = {};
+    const jsDocTags = ts.getJSDocTags(node);
+    const result: Record<string, Json> = {};
 
 	for (const tag of jsDocTags) {
 		const tagName = tag.tagName.text;
@@ -753,26 +794,39 @@ function extractJSDocFromNode(node: ts.Node): {
 		} else if (tagName === "example") {
 			result.example = comment;
 		} else if (tagName === "externalDocs") {
-			try {
-				const externalDocs = JSON.parse(comment);
-				if (
-					externalDocs &&
-					typeof externalDocs === "object" &&
-					"url" in externalDocs
-				) {
-					result.externalDocs = externalDocs;
-				}
-			} catch (e) {
-				// Ignore invalid JSON
-			}
-		}
-	}
+            try {
+                const externalDocs = JSON.parse(comment);
+                if (
+                    externalDocs &&
+                    typeof externalDocs === "object" &&
+                    "url" in externalDocs
+                ) {
+                    (result as {
+                        externalDocs?: { url: string; description?: string };
+                    }).externalDocs = externalDocs as {
+                        url: string;
+                        description?: string;
+                    };
+                }
+            } catch {
+                // Ignore invalid JSON
+            }
+        }
+    }
 
-	return result;
+    return result as {
+        summary?: string;
+        description?: string;
+        tags?: string[];
+        deprecated?: boolean;
+        operationId?: string;
+        externalDocs?: { url: string; description?: string };
+        example?: string;
+    };
 }
 
 // Function to convert TypeScript type to JSON Schema with JSDoc support
-function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
+function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): Json {
 	// Handle primitive types
 	if (type.flags & ts.TypeFlags.String) {
 		return { type: "string" };
@@ -788,38 +842,38 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
 	}
 
 	// Handle object types
-	if (type.flags & ts.TypeFlags.Object) {
-		const objectType = type as ts.ObjectType;
+    if (type.flags & ts.TypeFlags.Object) {
 
 		// Handle array types
-		if (type.symbol && type.symbol.name === "Array") {
-			// For array types, try to get the element type from type arguments
-			const typeArgs = (type as any).typeArguments;
-			if (typeArgs && typeArgs.length > 0) {
-				return {
-					type: "array",
-					items: convertTypeToJsonSchema(typeArgs[0], checker),
-				};
-			}
-			return {
-				type: "array",
-				items: {},
-			};
-		}
+        if (type.symbol && type.symbol.name === "Array") {
+            // For array types, try to get the element type from type arguments
+            const typeArgs = (type as unknown as { typeArguments?: readonly ts.Type[] }).typeArguments;
+            if (typeArgs && typeArgs.length > 0) {
+                return {
+                    type: "array",
+                    items: convertTypeToJsonSchema(typeArgs[0], checker),
+                };
+            }
+            return {
+                type: "array",
+                items: {},
+            };
+        }
 
 		// Handle interface/object types
-		const properties: any = {};
-		const required: string[] = [];
+        const properties: Record<string, Json> = {};
+        const required: string[] = [];
 
 		const symbol = type.symbol;
 		if (symbol?.members) {
 			for (const [name, member] of symbol.members) {
 				const nameStr = name as string;
 				if (member.flags & ts.SymbolFlags.Property) {
-					const propertyType = checker.getTypeOfSymbolAtLocation(
-						member,
-						member.valueDeclaration!,
-					);
+                    if (!member.valueDeclaration) continue;
+                    const propertyType = checker.getTypeOfSymbolAtLocation(
+                        member,
+                        member.valueDeclaration,
+                    );
 					const propertySchema = convertTypeToJsonSchema(propertyType, checker);
 
 					// Extract JSDoc from the property declaration
@@ -828,9 +882,15 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): any {
 						const jsDoc = extractJSDocFromNode(declaration);
 
 						// Add JSDoc information to the schema
-						if (jsDoc.description) {
-							propertySchema.description = jsDoc.description;
-						}
+                        if (jsDoc.description) {
+                            if (
+                                typeof propertySchema === "object" &&
+                                propertySchema !== null
+                            ) {
+                                (propertySchema as Record<string, unknown>).description =
+                                    jsDoc.description;
+                            }
+                        }
 
 						// Check if property is optional
 						if (!declaration.questionToken) {
@@ -921,18 +981,23 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 		const sourceFiles = program.getSourceFiles();
 
 		// Simple OpenAPI spec
-		const openapiSpec = {
-			openapi: "3.1.0",
-			info: {
-				title: "Simple Example API",
-				version: "1.0.0",
-				description: "Generated from TypeScript routes",
-			},
-			paths: {} as any,
-			components: {
-				schemas: {},
-			},
-		};
+        const openapiSpec: {
+            openapi: string;
+            info: { title: string; version: string; description: string };
+            paths: Record<string, OperationMap>;
+            components: { schemas: Record<string, unknown> };
+        } = {
+            openapi: "3.1.0",
+            info: {
+                title: "Simple Example API",
+                version: "1.0.0",
+                description: "Generated from TypeScript routes",
+            },
+            paths: {},
+            components: {
+                schemas: {},
+            },
+        };
 
 		// Process source files
 		log.debug(`Found ${sourceFiles.length} source files`);
