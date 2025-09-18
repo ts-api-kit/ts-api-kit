@@ -8,16 +8,17 @@ Thanks for your interest in contributing to TS API Kit! This guide explains how 
 
 ```bash
 # Fork the repository on GitHub and clone your fork
-git clone https://github.com/YOUR_USERNAME/ts-api-kit.git
+git clone https://github.com/ts-api-kit/ts-api-kit.git
 cd ts-api-kit
 
 # Add the original repository as upstream
-git remote add upstream https://github.com/devzolo/ts-api-kit.git
+git remote add upstream https://github.com/ts-api-kit/ts-api-kit.git
 ```
 
 ### 2) Environment Setup
 
 Prerequisites:
+
 - Node.js 18+
 - pnpm 9+
 
@@ -76,7 +77,8 @@ git push origin feat/your-feature
 
 ### Commits (Conventional Commits)
 
-We follow https://www.conventionalcommits.org. Common types:
+We follow <https://www.conventionalcommits.org>. Common types:
+
 - `feat:` new feature
 - `fix:` bug fix
 - `docs:` documentation only changes
@@ -164,9 +166,9 @@ pnpm test
 
 ## 📞 Support
 
-- 💬 GitHub Discussions: https://github.com/devzolo/ts-api-kit/discussions
-- 🐛 GitHub Issues: https://github.com/devzolo/ts-api-kit/issues
-- 📧 Email: contact@devzolo.com
+- 💬 GitHub Discussions: <https://github.com/ts-api-kit/ts-api-kit/discussions>
+- 🐛 GitHub Issues: <https://github.com/ts-api-kit/ts-api-kit/issues>
+- 📧 Email: <contact@devzolo.com>
 
 ## 📄 License
 
