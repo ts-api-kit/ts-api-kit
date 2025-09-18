@@ -1,5 +1,13 @@
 import type { RouteJSDocOA } from "./jsdoc-extractor.ts";
 
+/**
+ * Merges multiple OpenAPI documents into a single document.
+ * 
+ * @param jsdocOA - OpenAPI data from JSDoc comments
+ * @param cfgOA - OpenAPI data from configuration
+ * @param inferred - Inferred method and path data
+ * @returns Merged OpenAPI document
+ */
 export function mergeOpenAPI(
 	jsdocOA: RouteJSDocOA,
 	cfgOA: any,

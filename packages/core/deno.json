@@ -1,6 +1,6 @@
 {
   "name": "@ts-api-kit/core",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A modern TypeScript framework for building APIs with file-based routing, OpenAPI generation, and Valibot schema validation. Perfect for creating type-safe REST APIs with automatic documentation.",
   "exports": {
     ".": "./src/index.ts",

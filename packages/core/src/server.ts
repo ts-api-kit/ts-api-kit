@@ -20,7 +20,6 @@ import type { Context,MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
 import { stream } from "hono/streaming";
-import type { ResponseInit } from "undici-types";
 import { mountFileRouter } from "./file-router.ts";
 import type { response } from "./openapi/markers.ts";
 import {
@@ -37,6 +36,14 @@ import {
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+/**
+ * Custom error class for application-specific errors with HTTP status codes.
+ * 
+ * @example
+ * ```typescript
+ * throw new AppError(404, "User not found", { userId: 123 });
+ * ```
+ */
 export class AppError extends Error {
 	public code: number;
 	public meta?: Record<string, unknown>;
@@ -563,10 +570,22 @@ export const jsxStreamHono = (
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+/**
+ * Infers the input type from a StandardSchemaV1 schema.
+ * 
+ * @template S - The schema type
+ * @returns The inferred input type
+ */
 export type InferInput<S> = S extends StandardSchemaV1<any, any>
 	? StandardSchemaV1.InferInput<S>
 	: unknown;
 
+/**
+ * Infers the output type from a StandardSchemaV1 schema.
+ * 
+ * @template S - The schema type
+ * @returns The inferred output type
+ */
 export type InferOutput<S> = S extends StandardSchemaV1<any, any>
 	? StandardSchemaV1.InferOutput<S>
 	: unknown;
@@ -657,6 +676,10 @@ export function toStandardSchema<S extends AnySchema>(
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+/**
+ * Defines the schema structure for request validation.
+ * Each property represents a different part of the HTTP request.
+ */
 export type SchemaDefinition = {
 	query?: AnySchema;
 	params?: AnySchema;
@@ -665,6 +688,9 @@ export type SchemaDefinition = {
 };
 
 // Tipos de OpenAPI (reusados no registry)
+/**
+ * Extends SchemaDefinition with OpenAPI metadata for documentation generation.
+ */
 export type WithOpenAPI = {
 	openapi?: {
 		method?: HttpMethod; // Now optional - will be inferred from export name
@@ -675,6 +701,9 @@ export type WithOpenAPI = {
 	};
 } & SchemaDefinition;
 
+/**
+ * Union type for route specifications, supporting both basic and OpenAPI-enhanced schemas.
+ */
 export type RouteSpec = SchemaDefinition | WithOpenAPI;
 
 type EffectiveSchemas<T extends RouteSpec> = {
