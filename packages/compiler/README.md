@@ -1,24 +1,24 @@
 # TS API Compiler
 
-Plugin TypeScript para gerar automaticamente arquivos OpenAPI.json a partir de rotas TypeScript.
+TypeScript plugin for automatically generating OpenAPI.json files from TypeScript routes.
 
-## Funcionalidades
+## Features
 
-- ✅ Detecção automática de arquivos de rota (`+route.ts`)
-- ✅ Extração de métodos HTTP (GET, POST, PUT, DELETE, etc.)
-- ✅ Geração de especificação OpenAPI 3.1.0
-- ✅ Suporte a parâmetros dinâmicos (`[id]` → `{id}`)
-- ✅ Integração com `tsc` via plugins
+- ✅ Automatic detection of route files (`+route.ts`)
+- ✅ HTTP method extraction (GET, POST, PUT, DELETE, etc.)
+- ✅ OpenAPI 3.1.0 specification generation
+- ✅ Dynamic parameters support (`[id]` → `{id}`)
+- ✅ Integration with `tsc` via plugins
 
-## Instalação
+## Installation
 
-O plugin está incluído no pacote `ts-api-compiler` e pode ser usado em qualquer projeto TypeScript.
+The plugin is included in the `@ts-api-kit/compiler` package and can be used in any TypeScript project.
 
-## Uso
+## Usage
 
-### Método 1: Script NPM (Recomendado)
+### Method 1: NPM Script (Recommended)
 
-Adicione um script no seu `package.json`:
+Add a script to your `package.json`:
 
 ```json
 {
@@ -28,15 +28,15 @@ Adicione um script no seu `package.json`:
 }
 ```
 
-Execute:
+Run:
 
 ```bash
 npm run build:openapi
 ```
 
-### Método 2: Plugin TypeScript
+### Method 2: TypeScript Plugin
 
-Configure o plugin no seu `tsconfig.json`:
+Configure the plugin in your `tsconfig.json`:
 
 ```json
 {
@@ -51,35 +51,35 @@ Configure o plugin no seu `tsconfig.json`:
 }
 ```
 
-Execute:
+Run:
 
 ```bash
 tsc
 ```
 
-## Configuração
+## Configuration
 
-### Opções do Plugin
+### Plugin Options
 
-O plugin aceita as seguintes opções:
+The plugin accepts the following options:
 
 ```typescript
 interface OpenAPIPluginOptions {
-  outputFile?: string; // Caminho do arquivo de saída (padrão: "openapi.json")
-  title?: string; // Título da API (padrão: "API Documentation")
-  version?: string; // Versão da API (padrão: "1.0.0")
-  description?: string; // Descrição da API
+  outputFile?: string; // Output file path (default: "openapi.json")
+  title?: string; // API title (default: "API Documentation")
+  version?: string; // API version (default: "1.0.0")
+  description?: string; // API description
   servers?: Array<{
-    // Servidores da API
+    // API servers
     url: string;
     description?: string;
   }>;
 }
 ```
 
-### Estrutura de Rotas
+### Route Structure
 
-O plugin detecta automaticamente arquivos que terminam com `+route.ts` e extrai os métodos HTTP exportados:
+The plugin automatically detects files ending with `+route.ts` and extracts exported HTTP methods:
 
 ```typescript
 // src/routes/users/+route.ts
@@ -92,17 +92,17 @@ export const PUT = handle(/* ... */);
 export const DELETE = handle(/* ... */);
 ```
 
-### Mapeamento de Caminhos
+### Path Mapping
 
-Os caminhos são automaticamente derivados da estrutura de arquivos:
+Paths are automatically derived from the file structure:
 
 - `src/routes/users/+route.ts` → `/routes/users`
 - `src/routes/users/[id]/+route.ts` → `/routes/users/{id}`
 - `src/routes/example/+route.ts` → `/routes/example`
 
-## Exemplo de Saída
+## Example Output
 
-O plugin gera um arquivo `openapi.json` com a seguinte estrutura:
+The plugin generates an `openapi.json` file with the following structure:
 
 ```json
 {
@@ -142,45 +142,45 @@ O plugin gera um arquivo `openapi.json` com a seguinte estrutura:
 }
 ```
 
-## Desenvolvimento
+## Development
 
-### Estrutura do Projeto
+### Project Structure
 
 ```tree
 packages/ts-api-compiler/
 ├── src/
-│   ├── plugin.ts              # Plugin principal com lógica de extração
-│   ├── ts-plugin.ts           # Plugin para uso com TypeScript
-│   ├── ts-plugin-simple.ts    # Plugin simplificado
-│   ├── simple-generator.ts    # Gerador standalone
-│   └── generate-openapi.ts    # CLI para geração
+│   ├── plugin.ts              # Main plugin with extraction logic
+│   ├── ts-plugin.ts           # Plugin for use with TypeScript
+│   ├── ts-plugin-simple.ts    # Simplified plugin
+│   ├── simple-generator.ts    # Standalone generator
+│   └── generate-openapi.ts    # CLI for generation
 └── README.md
 ```
 
-### Adicionando Novas Funcionalidades
+### Adding New Features
 
-1. **Extração de Schemas**: Para extrair schemas Valibot dos handlers
-2. **JSDoc Support**: Para extrair documentação dos comentários
-3. **Request/Response Types**: Para inferir tipos de request e response
-4. **Middleware Support**: Para processar middleware de rota
+1. **Schema Extraction**: To extract Valibot schemas from handlers
+2. **JSDoc Support**: To extract documentation from comments
+3. **Request/Response Types**: To infer request and response types
+4. **Middleware Support**: To process route middleware
 
-## Limitações Atuais
+## Current Limitations
 
-- Gera apenas operações básicas sem extração de schemas complexos
-- Não extrai documentação JSDoc automaticamente
-- Não processa configurações OpenAPI dos handlers
-- Não suporta middleware de rota
+- Generates only basic operations without complex schema extraction
+- Does not automatically extract JSDoc documentation
+- Does not process OpenAPI configurations from handlers
+- Does not support route middleware
 
-## Contribuição
+## Contributing
 
-Para contribuir com melhorias:
+To contribute improvements:
 
-1. Fork o repositório
-2. Crie uma branch para sua feature
-3. Implemente as mudanças
-4. Teste com o exemplo em `examples/simple-example`
-5. Abra um Pull Request
+1. Fork the repository
+2. Create a branch for your feature
+3. Implement the changes
+4. Test with the example in `examples/simple-example`
+5. Open a Pull Request
 
-## Licença
+## License
 
 MIT

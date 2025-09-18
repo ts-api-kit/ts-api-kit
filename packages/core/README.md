@@ -1,25 +1,25 @@
 # TS API Core
 
-Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot.
+A modern TypeScript framework for APIs based on Hono with file-based routing and Valibot schema validation.
 
-## Características
+## Features
 
-- 🚀 **Roteamento por arquivos** - Organize suas rotas como arquivos
-- 🔒 **Validação de schemas** - Validação automática com Valibot
-- 🛠️ **TypeScript nativo** - Suporte completo ao TypeScript
-- ⚡ **Baseado no Hono** - Performance e simplicidade
-- 🔧 **Middlewares** - Sistema de middlewares flexível
-- 📝 **Auto-documentação** - Schemas como documentação
+- 🚀 **File-based routing** - Organize your routes as files
+- 🔒 **Schema validation** - Automatic validation with Valibot
+- 🛠️ **Native TypeScript** - Full TypeScript support
+- ⚡ **Hono-powered** - Performance and simplicity
+- 🔧 **Middlewares** - Flexible middleware system
+- 📝 **Auto-documentation** - Schemas as documentation
 
-## Instalação
+## Installation
 
 ```bash
-npm install ts-api-core
+npm install @ts-api-kit/core
 ```
 
-## Uso Básico
+## Basic Usage
 
-### 1. Criando uma rota simples
+### 1. Creating a simple route
 
 ```typescript
 // src/routes/+route.ts
@@ -40,7 +40,7 @@ export default {
 };
 ```
 
-### 2. Rota com parâmetros dinâmicos
+### 2. Route with dynamic parameters
 
 ```typescript
 // src/routes/users/[id]/+route.ts
@@ -91,7 +91,7 @@ export const middleware: MiddlewareHandler = async (c, next) => {
 };
 ```
 
-### 4. Acessando dados da requisição
+### 4. Accessing request data
 
 ```typescript
 import { get, getRequestEvent, json } from "@ts-api-kit/core";
@@ -111,13 +111,13 @@ export default {
 };
 ```
 
-## Estrutura de Arquivos
+## File Structure
 
 ```text
 src/
 ├── routes/
-│   ├── +middleware.ts          # Middleware global
-│   ├── +route.ts              # Rota raiz (/)
+│   ├── +middleware.ts          # Global middleware
+│   ├── +route.ts              # Root route (/)
 │   ├── users/
 │   │   ├── +route.ts          # /users
 │   │   └── [id]/
@@ -125,13 +125,13 @@ src/
 │   └── api/
 │       └── v1/
 │           └── +route.ts      # /api/v1
-├── server.ts                  # Configuração do servidor
-└── index.ts                   # Ponto de entrada
+├── server.ts                  # Server configuration
+└── index.ts                   # Entry point
 ```
 
-## Validação de Schemas
+## Schema Validation
 
-O framework usa Valibot para validação. Exemplos de schemas:
+The framework uses Valibot for validation. Schema examples:
 
 ```typescript
 import * as v from "valibot";
@@ -155,19 +155,19 @@ v.object({
 })
 ```
 
-## Métodos HTTP Suportados
+## Supported HTTP Methods
 
-- `GET` - Buscar dados
-- `POST` - Criar recursos
-- `PUT` - Atualizar recursos
-- `PATCH` - Atualização parcial
-- `DELETE` - Deletar recursos
+- `GET` - Fetch data
+- `POST` - Create resources
+- `PUT` - Update resources
+- `PATCH` - Partial updates
+- `DELETE` - Delete resources
 - `OPTIONS` - CORS
-- `HEAD` - Headers apenas
+- `HEAD` - Headers only
 
-## Exemplos de Uso
+## Usage Examples
 
-### API REST completa
+### Complete REST API
 
 ```typescript
 // src/routes/posts/+route.ts
@@ -178,7 +178,7 @@ export default {
       limit: v.optional(v.pipe(v.string(), v.transform(Number))),
     }),
   }, ({ query }) => {
-    // Listar posts
+    // List posts
   }),
   
   POST: get({
@@ -187,7 +187,7 @@ export default {
       content: v.string(),
     }),
   }, ({ body }) => {
-    // Criar post
+    // Create post
   }),
 };
 
@@ -198,7 +198,7 @@ export default {
       id: v.pipe(v.string(), v.transform(Number)),
     }),
   }, ({ params }) => {
-    // Buscar post por ID
+    // Fetch post by ID
   }),
   
   PUT: get({
@@ -210,7 +210,7 @@ export default {
       content: v.string(),
     }),
   }, ({ params, body }) => {
-    // Atualizar post
+    // Update post
   }),
   
   DELETE: get({
@@ -218,21 +218,21 @@ export default {
       id: v.pipe(v.string(), v.transform(Number)),
     }),
   }, ({ params }) => {
-    // Deletar post
+    // Delete post
   }),
 };
 ```
 
-## Scripts Disponíveis
+## Available Scripts
 
 ```bash
-# Desenvolvimento
+# Development
 npm run dev
 
 # Build
 npm run build
 ```
 
-## Licença
+## License
 
 MIT
