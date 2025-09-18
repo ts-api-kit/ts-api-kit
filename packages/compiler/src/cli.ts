@@ -17,8 +17,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
 import { Command } from "commander";
-import type { OpenAPIPluginOptions } from "./plugin.ts";
 import { generateOpenAPI } from "./openapi-generator.ts";
+import type { OpenAPIPluginOptions } from "./plugin.ts";
 
 const program = new Command();
 
@@ -199,8 +199,15 @@ async function watchAndGenerate(
 	});
 }
 
+type SetupProjectOptions = {
+    project: string;
+    output: string;
+    title: string;
+    version: string;
+};
+
 // Função para configurar projeto
-async function setupProject(options: any) {
+async function setupProject(options: SetupProjectOptions) {
 	const tsconfigPath = path.resolve(options.project);
 
 	if (!fs.existsSync(tsconfigPath)) {
@@ -215,9 +222,11 @@ async function setupProject(options: any) {
 		tsconfigContent.compilerOptions.plugins = [];
 	}
 
-	const pluginExists = tsconfigContent.compilerOptions.plugins.some(
-		(plugin: any) => plugin.transform?.includes("ts-plugin-simple.ts"),
-	);
+    const pluginExists = tsconfigContent.compilerOptions.plugins.some(
+        (plugin: { transform?: string }) =>
+            typeof plugin.transform === "string" &&
+            plugin.transform.includes("ts-plugin-simple.ts"),
+    );
 
 	if (!pluginExists) {
 		tsconfigContent.compilerOptions.plugins.push({
