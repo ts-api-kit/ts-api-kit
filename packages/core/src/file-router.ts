@@ -1,4 +1,4 @@
-import console from "node:console";
+import { createLogger } from "./utils/logger.ts";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
 import type { Hono, MiddlewareHandler } from "hono";
@@ -71,12 +71,13 @@ export async function mountFileRouter(
 	app: Hono,
 	opts: FileRouterOptions,
 ): Promise<MountResult> {
+	const log = createLogger("core:file-router");
 	const routesDir = resolve(opts.routesDir);
 	const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
 	const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
 
-	console.log("Routes directory:", routesDir);
-	console.log("Route globs:", routeGlobs);
+	log.debug("Routes directory:", routesDir);
+	log.debug("Route globs:", routeGlobs);
 
 	const routeFiles = await fg(routeGlobs, {
 		cwd: routesDir,
@@ -84,7 +85,7 @@ export async function mountFileRouter(
 		dot: false,
 	});
 
-	console.log("Found route files:", routeFiles);
+	log.debug("Found route files:", routeFiles);
 
 	// Debug: list all files in routes directory
 	const allFiles = await fg("**/*", {
@@ -92,7 +93,7 @@ export async function mountFileRouter(
 		absolute: true,
 		dot: false,
 	});
-	console.log("All files in routes directory:", allFiles);
+	log.debug("All files in routes directory:", allFiles);
 
 	const mwFiles = await fg(mwGlobs, {
 		cwd: routesDir,
@@ -100,7 +101,7 @@ export async function mountFileRouter(
 		dot: false,
 	});
 
-	console.log("Found middleware files:", mwFiles);
+	log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
 	for (const file of sortByDepthAsc(mwFiles)) {
 		const dir = dirname(file);
@@ -118,25 +119,25 @@ export async function mountFileRouter(
 	for (const file of sortByDepthDesc(routeFiles)) {
 		const modUrl = `${pathToFileURL(file).href}?v=${Date.now()}`;
 
-		console.log(`Processing file: ${file}`);
-		console.log(`Module URL: ${modUrl}`);
+		log.debug(`Processing file: ${file}`);
+		log.debug(`Module URL: ${modUrl}`);
 
 		// Derive paths once per file
 		const { hono, openapi } = derivePathsFromFile(file);
-		console.log(`Derived paths - Hono: ${hono}, OpenAPI: ${openapi}`);
+		log.debug(`Derived paths - Hono: ${hono}, OpenAPI: ${openapi}`);
 
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
 		const mod = (await import(modUrl)) as RouteModuleExport;
-		console.log(`Module exports:`, Object.keys(mod));
+		log.debug(`Module exports:`, Object.keys(mod));
 
 		// Support both named exports and default export
 		// If there's a default export, use it; otherwise use the module itself
 		const routeModule =
 			"default" in mod && mod.default ? mod.default : (mod as RouteModule);
-		console.log(`Route module methods:`, Object.keys(routeModule));
-		console.log(`Has default export:`, "default" in mod && !!mod.default);
+		log.debug(`Route module methods:`, Object.keys(routeModule));
+		log.debug(`Has default export:`, "default" in mod && !!mod.default);
 
 		// Process all exports to infer methods and handle OpenAPI registration
 		for (const [exportName, value] of Object.entries(routeModule)) {
@@ -176,7 +177,7 @@ export async function mountFileRouter(
 				);
 			}
 
-			console.log(`Adding ${method.toUpperCase()} handler to ${hono}`);
+			log.debug(`Adding ${method.toUpperCase()} handler to ${hono}`);
 
 			// Register in Hono with the runtime path
 			// @ts-expect-error dynamic method indexing
@@ -201,5 +202,12 @@ export async function mountFileRouter(
 			routesMounted++;
 		}
 	}
-	return { routes: routesMounted, middlewares: mwsByDir.size };
+	const result = { routes: routesMounted, middlewares: mwsByDir.size };
+	if (routesMounted || mwsByDir.size) {
+		log.info(
+			`Mounted ${routesMounted} route${routesMounted === 1 ? "" : "s"}` +
+			(mwsByDir.size ? ` • ${mwsByDir.size} middleware` : ""),
+		);
+	}
+	return result;
 }

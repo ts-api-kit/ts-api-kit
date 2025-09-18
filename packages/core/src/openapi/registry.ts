@@ -1,6 +1,6 @@
 // Central registry for operations -> OpenAPI doc
 
-import console from "node:console";
+import { createLogger } from "../utils/logger.ts";
 import { OpenAPIBuilder, type OperationConfig } from "./builder.ts";
 import { response } from "./index.ts";
 
@@ -26,7 +26,8 @@ export const openapi: OpenAPIBuilder = new OpenAPIBuilder({
  * @param op - The operation configuration to register
  */
 export const register = (op: OperationConfig): void => {
-	console.log("Registering operation with filePath:", op.filePath);
+	const log = createLogger("openapi:registry");
+	log.debug("Registering operation with filePath:", op.filePath);
 	// optional: automatically add tags
 	op.tags?.forEach((t) => {
 		openapi.addTag(t);

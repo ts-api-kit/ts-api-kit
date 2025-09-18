@@ -1,8 +1,8 @@
 // Lightweight OpenAPI builder focused on route-level metadata + valibot schemas
 
-import console from "node:console";
 import type * as v from "valibot";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
+import { createLogger } from "../utils/logger.ts";
 import type { response } from "./markers.ts";
 
 // Local type definition
@@ -302,20 +302,21 @@ export class OpenAPIBuilder {
 
 		const parameters: any[] = [];
 
+		const log = createLogger("openapi:builder");
 		if (op.request?.query) {
-			console.log(`Processing query params with filePath: ${op.filePath}`);
+			log.debug(`Processing query params with filePath: ${op.filePath}`);
 			parameters.push(
 				...valibotObjectToParams(op.request.query, "query", op.filePath),
 			);
 		}
 		if (op.request?.headers) {
-			console.log(`Processing header params with filePath: ${op.filePath}`);
+			log.debug(`Processing header params with filePath: ${op.filePath}`);
 			parameters.push(
 				...valibotObjectToParams(op.request.headers, "header", op.filePath),
 			);
 		}
 		if (op.request?.params) {
-			console.log(`Processing path params with filePath: ${op.filePath}`);
+			log.debug(`Processing path params with filePath: ${op.filePath}`);
 			parameters.push(
 				...valibotObjectToParams(op.request.params, "path", op.filePath),
 			);
@@ -386,6 +387,7 @@ function valibotObjectToParams(
 	where: "query" | "path" | "header",
 	filePath?: string,
 ) {
+	const log = createLogger("openapi:jsdoc");
 	const entries: Record<string, v.BaseSchema<any, any, any>> = (schema as any)
 		.entries ?? {};
 	const out: any[] = [];
@@ -404,11 +406,11 @@ function valibotObjectToParams(
 
 		// Extract JSDoc for this parameter if filePath is provided
 		if (filePath) {
-			console.log(
+			log.debug(
 				`Extracting JSDoc for parameter "${name}" from file: ${filePath}`,
 			);
 			const jsdoc = readParameterJSDoc(filePath, name);
-			console.log(`JSDoc result for "${name}":`, jsdoc);
+			log.debug(`JSDoc result for "${name}":`, jsdoc);
 			if (jsdoc.description) {
 				param.description = jsdoc.description;
 			}
@@ -416,7 +418,7 @@ function valibotObjectToParams(
 				param.example = jsdoc.example;
 			}
 		} else {
-			console.log(`No filePath provided for parameter "${name}"`);
+			log.debug(`No filePath provided for parameter "${name}"`);
 		}
 
 		out.push(param);
