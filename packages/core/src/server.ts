@@ -431,7 +431,7 @@ export const createResponseTools = <
 		if (filename) {
 			headers.set("Content-Disposition", `attachment; filename="${filename}"`);
 		}
-		return new Response(data, {
+		return new Response(data as BodyInit, {
 			status: init?.status ?? 200,
 			...init,
 			headers,
