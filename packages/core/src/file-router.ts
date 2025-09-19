@@ -16,11 +16,30 @@ import { createLogger } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
+/**
+ * Options to drive file-based route discovery and mounting.
+ *
+ * Used by {@link mountFileRouter} to scan your `routes` directory and attach
+ * handlers and middleware to a Hono app while keeping OpenAPI metadata in sync.
+ */
 export interface FileRouterOptions {
-	routesDir: string;
-	routeGlobs?: string[];
-	middlewareGlobs?: string[];
-	basePath?: string;
+    /**
+     * Absolute or relative path to the routes directory root.
+     * Example: `./src/routes`.
+     */
+    routesDir: string;
+    /**
+     * Glob patterns to find route files. Defaults to all `+route.*` under subfolders.
+     */
+    routeGlobs?: string[];
+    /**
+     * Glob patterns to find middleware files. Defaults to all `+middleware.*` under subfolders.
+     */
+    middlewareGlobs?: string[];
+    /**
+     * Optional base path where routes are mounted (e.g. `/api`).
+     */
+    basePath?: string;
 }
 
 // HTTP method exports that we can infer from

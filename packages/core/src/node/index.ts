@@ -15,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import * as ts from "typescript";
+import ts from "typescript";
 
 const JSX_OPTS = {
 	jsx: "react-jsx",
@@ -23,6 +23,19 @@ const JSX_OPTS = {
 };
 
 const exts = new Set([".ts", ".tsx", ".jsx"]);
+
+// Minimal types for Node ESM loader hooks to avoid `any`
+type LoaderResolveContext = {
+    conditions: string[];
+    importAssertions: Record<string, unknown>;
+    parentURL?: string;
+};
+type LoaderResolveResult = { url: string; format?: string; shortCircuit?: boolean };
+type NextResolve = (specifier: string, context: LoaderResolveContext) => Promise<LoaderResolveResult>;
+
+type LoaderLoadContext = { format?: string; importAssertions: Record<string, unknown> };
+type LoaderLoadResult = { format: string; source: string | ArrayBuffer | Uint8Array | null; shortCircuit?: boolean };
+type NextLoad = (url: string, context: LoaderLoadContext) => Promise<LoaderLoadResult>;
 
 function transpileTS(source: string, filename: string) {
 	/** @type {import('typescript').TranspileOptions} */
@@ -68,11 +81,14 @@ function transpileTS(source: string, filename: string) {
 	return code;
 }
 
+/**
+ * Node ESM loader hook to resolve TS/TSX/JSX files as modules.
+ */
 export async function resolve(
 	specifier: string,
-	context: any,
-	next: any,
-): Promise<any> {
+	context: LoaderResolveContext,
+	next: NextResolve,
+): Promise<LoaderResolveResult> {
 	const res = await next(specifier, context);
 	if (res?.url?.startsWith("file:")) {
 		const ext = extname(new URL(res.url).pathname);
@@ -81,7 +97,10 @@ export async function resolve(
 	return res;
 }
 
-export async function load(url: string, context: any, next: any): Promise<any> {
+/**
+ * Node ESM loader hook to transpile TS/TSX/JSX on-the-fly using TypeScript.
+ */
+export async function load(url: string, context: LoaderLoadContext, next: NextLoad): Promise<LoaderLoadResult> {
 	if (!url.startsWith("file:")) return next(url, context);
 	const filename = fileURLToPath(url);
 	const ext = extname(filename);

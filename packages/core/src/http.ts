@@ -1,3 +1,4 @@
+/** HTTP methods supported by the routing layer. */
 export type HttpMethod =
 	| "get"
 	| "post"
@@ -7,6 +8,9 @@ export type HttpMethod =
 	| "options"
 	| "head";
 
+/**
+ * Declarative route description usable by generators and tooling.
+ */
 export type HttpRoute<
 	P = unknown, // params (path)
 	Q = unknown, // querystring

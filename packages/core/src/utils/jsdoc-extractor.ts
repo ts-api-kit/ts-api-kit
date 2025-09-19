@@ -1,22 +1,40 @@
 import fs from "node:fs";
 import type { HttpMethod } from "../openapi/registry.ts";
 
+/**
+ * Subset of OpenAPI operation fields collected from route JSDoc.
+ */
 export type RouteJSDocOA = {
-	summary?: string;
-	description?: string;
-	tags?: string[];
-	security?: Array<Record<string, string[]>>;
-	deprecated?: boolean;
-	operationId?: string;
-	externalDocs?: { url: string; description?: string };
-	// Optionally, you can support @path and @method override (not recommended):
-	path?: string;
-	method?: HttpMethod;
+    /** One-line summary for the operation. */
+    summary?: string;
+    /** Detailed description, supports multiline. */
+    description?: string;
+    /** Tags used to group operations in the UI. */
+    tags?: string[];
+    /** Security requirements for the operation. */
+    security?: Array<Record<string, string[]>>;
+    /** Marks the operation as deprecated. */
+    deprecated?: boolean;
+    /** Optional explicit operationId override. */
+    operationId?: string;
+    /** Link to external documentation for the operation. */
+    externalDocs?: { url: string; description?: string };
+    /**
+     * Optional overrides for path/method when not inferred from file structure.
+     * Prefer auto-inference; these are provided for edge cases.
+     */
+    path?: string;
+    method?: HttpMethod;
 };
 
+/**
+ * JSDoc information parsed for a single Valibot parameter entry.
+ */
 export type ParameterJSDoc = {
-	description?: string;
-	example?: string;
+    /** Human-readable description for the parameter. */
+    description?: string;
+    /** Simple example value. */
+    example?: string;
 };
 
 /** Lê o bloco JSDoc que precede `export const|function <ExportName>` */

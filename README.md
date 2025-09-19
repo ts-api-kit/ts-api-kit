@@ -63,16 +63,19 @@ import { get, json } from "@ts-api-kit/core";
 import * as v from "valibot";
 
 export default {
-  GET: get({
-    query: v.object({
-      name: v.optional(v.string()),
-    }),
-  }, ({ query }) => {
-    return json({
-      message: `Hello ${query.name || 'World'}!`,
-      timestamp: new Date().toISOString(),
-    });
-  }),
+  GET: get(
+    {
+      query: v.object({
+        name: v.optional(v.string()),
+      }),
+    },
+    ({ query }) => {
+      return json({
+        message: `Hello ${query.name || "World"}!`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  ),
 };
 ```
 

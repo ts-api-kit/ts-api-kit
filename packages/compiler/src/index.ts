@@ -1,7 +1,7 @@
 /**
  * @fileoverview Main entry point for @ts-api-kit/compiler
  *
- * This module provides TypeScript compiler functionality for:
+ * This module provides TypeScript compiler utilities for:
  * - OpenAPI schema generation from TypeScript types
  * - Type analysis and introspection
  * - Component registry management
@@ -32,19 +32,22 @@ type OA =
 	| { $ref: string }
 	| { type: "unknown" | "any" };
 
-// Registry para componentes nomeados
+// Registry for named components
 const componentRegistry = new Map<string, OA>();
 const typeToName = new Map<number, string>();
 
 /* ───────────────────────── helpers ───────────────────────── */
 
+/**
+ * Produces a stable component name for a given TypeScript type.
+ */
 function generateTypeName(t: Type): string {
-	const id = (t.compilerType as any).id as number | undefined;
+    const id = (t.compilerType as { id?: number }).id;
 	if (id && typeToName.has(id)) {
 		return typeToName.get(id) ?? "";
 	}
 
-	// Tenta pegar o nome do símbolo
+    // Try to use the symbol name when available
 	const symbol = t.getSymbol();
 	if (symbol) {
 		const name = symbol.getName();
@@ -55,7 +58,7 @@ function generateTypeName(t: Type): string {
 		}
 	}
 
-	// Se não conseguir um nome, gera um baseado no tipo
+    // Otherwise derive a generic name from the base kind
 	const flags = t.getFlags();
 	let baseName = "Unknown";
 
@@ -83,13 +86,13 @@ function makeUniqueName(baseName: string): string {
 }
 
 function apparent(t: Type<ts.Type>): Type<ts.Type> {
-	// resolve alias (p.ex. "User")
-	const aliasSym = t.getAliasSymbol();
+    // Resolve alias types (e.g. "User")
+    const _aliasSym = t.getAliasSymbol();
 	// if (aliasSym) {
 	// 	const declared = checker.getDeclaredTypeOfSymbol(aliasSym);
 	// 	return declared;
 	// }
-	// pega tipo aparente (resolve coisas como widenings)
+    // Prefer the apparent type to clean up widenings
 	return t.getApparentType();
 }
 
@@ -122,7 +125,7 @@ function literalToOA(t: Type): OA | null {
 }
 
 function isArrayType(t: Type) {
-	// Array<T> ou T[]
+    // Array<T> or T[]
 	if (t.isArray()) return true;
 	const text = t.getText();
 	return text.includes("[]");
@@ -135,11 +138,11 @@ function getArrayElementType(t: Type): Type | null {
 	}
 	const text = t.getText();
 	if (/\[\]$/.test(text)) {
-		// fallback: T[] → pegue T via type arguments quando disponível
+        // Fallback: T[] → try to grab T via type arguments when available
 		const ta = t.getAliasTypeArguments();
 		if (ta.length === 1) return ta[0];
 	}
-	// Array<T> genérico
+    // Generic Array<T>
 	const tas = t.getTypeArguments?.() ?? [];
 	if (tas.length === 1) return tas[0];
 	return null;
@@ -149,16 +152,16 @@ function mapIntrinsic(t: Type): OA | null {
 	if (t.isString()) return { type: "string" };
 	if (t.isNumber()) return { type: "number" };
 	if (t.isBoolean()) return { type: "boolean" };
-	if (isType(t, ts.TypeFlags.BigInt)) return { type: "string" }; // BigInt → string (combinável com format se quiser)
+    if (isType(t, ts.TypeFlags.BigInt)) return { type: "string" }; // BigInt → string (optionally combine with a format)
 	if (isType(t, ts.TypeFlags.Null)) return { type: "null" };
 	if (isType(t, ts.TypeFlags.Undefined) || isType(t, ts.TypeFlags.VoidLike)) {
-		// undefined em OpenAPI 3.1 normalmente vira "nullable" na união com null
+        // In OpenAPI 3.1 undefined is generally represented via nullable unions
 		return null;
 	}
 	if (isType(t, ts.TypeFlags.Any)) return { type: "any" };
 	if (isType(t, ts.TypeFlags.Unknown)) return { type: "unknown" };
 
-	// Verifica se é um tipo primitivo pelo nome do símbolo
+    // Quick check for boxed primitives using the symbol name
 	const symbol = t.getSymbol();
 	if (symbol) {
 		const symbolName = symbol.getName();
@@ -191,14 +194,14 @@ function isRecordLike(t: Type): { key: Type; value: Type } | null {
 	return null;
 }
 
-function toOpenApi(
+export function toOpenApi(
 	t: Type,
 	checker: ReturnType<Project["getTypeChecker"]>,
 	seen = new Set<number>(),
 	shouldCreateComponent = false,
 ): OA {
 	// evita ciclos
-	const id = (t.compilerType as any).id as number | undefined;
+    const id = (t.compilerType as { id?: number }).id;
 	if (id && seen.has(id)) {
 		// Se já existe um componente para este tipo, retorna $ref
 		if (typeToName.has(id)) {
@@ -225,10 +228,10 @@ function toOpenApi(
 	const prim = mapIntrinsic(t);
 	if (prim) return prim;
 
-	// Date
+    // Date
 	if (isDateType(t)) return { type: "string", format: "date-time" };
 
-	// Array
+    // Array
 	if (isArrayType(t)) {
 		const el = getArrayElementType(t) ?? t.getNumberIndexType();
 		if (el) {
@@ -241,7 +244,7 @@ function toOpenApi(
 		return { type: "array" as const, items: { type: "unknown" as const } };
 	}
 
-	// Map/Set
+    // Map/Set
 	const name = t.getSymbol()?.getName();
 	if (name === "Map") {
 		const tas = t.getTypeArguments?.() ?? [];
@@ -260,16 +263,16 @@ function toOpenApi(
 		return { type: "array" as const, items: vOA };
 	}
 
-	// Uniões
+    // Unions
 	if (t.isUnion()) {
 		const parts = t
 			.getUnionTypes()
 			.map((x) => toOpenApi(apparent(x), checker, seen));
-		// Trate undefined/null como nullable
+        // Treat undefined/null as nullable
 		const nonNull = parts.filter((p) => !("type" in p && p.type === "null"));
 		const hasNull = parts.length !== nonNull.length;
 
-		// Se é uma união com undefined (tipo opcional), trata como nullable
+        // Optional union with undefined → mark as nullable
 		const hasUndefined = parts.some((p) => "type" in p && p.type === "unknown");
 		if (hasUndefined && nonNull.length === 1) {
 			const single = nonNull[0];
@@ -284,7 +287,7 @@ function toOpenApi(
 		return { oneOf: nonNull, ...(hasNull ? { nullable: true } : {}) };
 	}
 
-	// Interseções
+    // Intersections
 	if ((t.getFlags() & ts.TypeFlags.Intersection) !== 0) {
 		const parts = t
 			.getIntersectionTypes()
@@ -292,9 +295,9 @@ function toOpenApi(
 		return { allOf: parts };
 	}
 
-	// Objetos, interfaces, tipos anônimos
+    // Objects, interfaces, anonymous types
 	if (isObjectLike(t)) {
-		// Record/index signature?
+        // Record/index signature?
 		const rec = isRecordLike(t);
 		if (rec) {
 			const vOA = toOpenApi(apparent(rec.value), checker, seen);
@@ -303,14 +306,14 @@ function toOpenApi(
 
 		const props = t.getProperties();
 
-		// Se deve criar um componente, cria primeiro para permitir recursão
+        // If creating a component, add a placeholder first to allow recursion
 		let typeName: string | null = null;
 		if (shouldCreateComponent && props.length > 0) {
 			typeName = generateTypeName(t);
-			const id = (t.compilerType as any).id as number | undefined;
+            const id = (t.compilerType as { id?: number }).id;
 			if (id) {
 				typeToName.set(id, typeName);
-				// Cria um placeholder temporário
+            // Create a temporary placeholder
 				componentRegistry.set(typeName, { type: "object" });
 			}
 		}
@@ -323,13 +326,13 @@ function toOpenApi(
 				p,
 				p.getValueDeclaration() ?? p.getDeclarations()[0] //?? sourceFile,
 			);
-			const pDecl = p.getDeclarations()[0];
+			// const pDecl = p.getDeclarations()[0];
 			const isOpt = !!(p.getFlags() & ts.SymbolFlags.Optional);
 
 			// Resolve o tipo da propriedade corretamente
 			const resolvedType = apparent(pType);
 
-			// Se for um tipo primitivo, mapeia diretamente
+        // Primitive types map directly
 			const prim = mapIntrinsic(resolvedType);
 			if (prim) {
 				properties[p.getName()] = prim;
@@ -337,7 +340,7 @@ function toOpenApi(
 				continue;
 			}
 
-			// Se for um literal, mapeia diretamente
+        // Literal types map directly
 			const lit = literalToOA(resolvedType);
 			if (lit) {
 				properties[p.getName()] = lit;
@@ -346,37 +349,37 @@ function toOpenApi(
 			}
 
 			// Para outros tipos, usa a função recursiva
-			// Se for um tipo complexo (objeto), cria como componente
+        // Complex object types may become components
 			const isComplexType =
 				isObjectLike(resolvedType) && resolvedType.getProperties().length > 0;
 			const finalType = toOpenApi(resolvedType, checker, seen, isComplexType);
 
-			// Se é opcional e tem undefined na união, remove o undefined e marca como nullable
+        // Optional with undefined in the union → mark as nullable
 			if (isOpt && resolvedType.isUnion()) {
 				const unionTypes = resolvedType.getUnionTypes();
 				const hasUndefined = unionTypes.some(
 					(ut) => ut.getFlags() & ts.TypeFlags.Undefined,
 				);
 				if (hasUndefined) {
-					// Remove undefined da união e marca como nullable
+                    // Remove undefined from the union and mark as nullable
 					const nonUndefinedTypes = unionTypes.filter(
 						(ut) => !(ut.getFlags() & ts.TypeFlags.Undefined),
 					);
 					if (nonUndefinedTypes.length === 1) {
 						const nonUndefinedType = apparent(nonUndefinedTypes[0]);
-						// Para arrays, não deve criar componente, apenas processar o array
+                    // For arrays, do not create a component, just process the array
 						const isArray = isArrayType(nonUndefinedType);
 						const shouldCreateComponentForArray =
 							!isArray &&
 							isObjectLike(nonUndefinedType) &&
 							nonUndefinedType.getProperties().length > 0;
-						const cleanType = toOpenApi(
-							nonUndefinedType,
-							checker,
-							seen,
-							shouldCreateComponentForArray,
-						);
-						properties[p.getName()] = { ...cleanType, nullable: true } as any;
+                            const cleanType = toOpenApi(
+                                nonUndefinedType,
+                                checker,
+                                seen,
+                                shouldCreateComponentForArray,
+                            );
+                            properties[p.getName()] = { oneOf: [cleanType], nullable: true };
 					} else {
 						// Se tem múltiplos tipos não-undefined, usa o oneOf original mas marca como nullable
 						const nonUndefinedParts = nonUndefinedTypes.map((ut) =>
@@ -401,7 +404,7 @@ function toOpenApi(
 		if (Object.keys(properties).length) obj.properties = properties;
 		if (required.length) obj.required = required;
 
-		// Se criou um componente, atualiza com o schema real
+        // If a component was created, update it with the real schema
 		if (typeName) {
 			componentRegistry.set(typeName, obj);
 			return { $ref: `#/components/schemas/${typeName}` };
@@ -410,7 +413,7 @@ function toOpenApi(
 		return obj;
 	}
 
-	// Fallback
+    // Fallback
 	return { type: "unknown" };
 }
 

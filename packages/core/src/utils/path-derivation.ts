@@ -1,4 +1,9 @@
 // Path derivation utility for file-based routing
+/**
+ * Pair of route patterns derived from a file path.
+ * - `hono` uses Hono syntax (e.g. `/users/:id`)
+ * - `openapi` uses OpenAPI syntax (e.g. `/users/{id}`)
+ */
 export type DerivedPaths = { hono: string; openapi: string };
 
 const FILE_RE = /(\+?route\.(?:t|j)sx?)$/; // +route.ts, route.ts, +route.tsx, etc.

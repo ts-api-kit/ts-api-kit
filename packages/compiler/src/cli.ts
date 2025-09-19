@@ -207,7 +207,7 @@ type SetupProjectOptions = {
 };
 
 // Função para configurar projeto
-async function setupProject(options: SetupProjectOptions) {
+function setupProject(options: SetupProjectOptions) {
 	const tsconfigPath = path.resolve(options.project);
 
 	if (!fs.existsSync(tsconfigPath)) {
@@ -274,7 +274,7 @@ async function setupProject(options: SetupProjectOptions) {
 }
 
 // Função para validar rotas
-async function validateRoutes(projectPath: string) {
+function validateRoutes(projectPath: string) {
 	const absoluteProjectPath = path.resolve(projectPath);
 
 	if (!fs.existsSync(absoluteProjectPath)) {
@@ -321,7 +321,7 @@ async function validateRoutes(projectPath: string) {
 }
 
 // Função para listar rotas
-async function listRoutes(projectPath: string) {
+function listRoutes(projectPath: string) {
 	const absoluteProjectPath = path.resolve(projectPath);
 
 	if (!fs.existsSync(absoluteProjectPath)) {

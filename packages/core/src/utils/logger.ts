@@ -33,12 +33,19 @@ function inferInitialLevel(): LevelName {
   return "info";
 }
 
+/**
+ * Sets the global log level.
+ * Accepts `silent | error | warn | info | debug`.
+ */
 export function setLogLevel(level: LevelName | string | undefined): void {
   if (!level) return;
   const key = String(level).toLowerCase();
   if (key in LEVELS) currentLevel = key as LevelName;
 }
 
+/**
+ * Gets the current global log level.
+ */
 export function getLogLevel(): LevelName {
   return currentLevel;
 }
@@ -55,6 +62,9 @@ function fmt(ns: string | undefined, msg: unknown): string {
   return ns ? `[${ns}] ${String(msg)}` : String(msg);
 }
 
+/**
+ * Minimal logger interface used across the kit.
+ */
 export type Logger = {
   debug: (...args: unknown[]) => void;
   info: (...args: unknown[]) => void;
@@ -62,6 +72,11 @@ export type Logger = {
   error: (...args: unknown[]) => void;
 };
 
+/**
+ * Creates a namespaced logger that honors the global log level.
+ *
+ * Namespace appears in log output as `[namespace]`.
+ */
 export function createLogger(namespace?: string): Logger {
   const ns = namespace;
   return {
@@ -88,6 +103,6 @@ export function createLogger(namespace?: string): Logger {
   };
 }
 
-// Default logger without namespace for quick use
+/** Default namespaced logger for quick use. */
 export const log: Logger = createLogger("ts-api-kit");
 

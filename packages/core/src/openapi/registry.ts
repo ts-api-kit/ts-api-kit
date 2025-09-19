@@ -1,7 +1,7 @@
 // Central registry for operations -> OpenAPI doc
 
 import { createLogger } from "../utils/logger.ts";
-import { OpenAPIBuilder, type OperationConfig } from "./builder.ts";
+import { OpenAPIBuilder, type OperationConfig, type RouteSchemas } from "./builder.ts";
 import { response } from "./index.ts";
 
 
@@ -44,9 +44,16 @@ export const getOpenApiJson = (): ReturnType<OpenAPIBuilder["toJSON"]> =>
 	openapi.toJSON();
 
 // Legacy compatibility - keep existing functions for backward compatibility
-/* deno-lint-ignore no-explicit-any */
-/* biome-ignore lint/suspicious/noExplicitAny: Compatibility layer across schema dialects */
-export type AnySchema = any;
+/**
+ * Broad schema placeholder usable with StandardSchema-compatible validators.
+ *
+ * This is intentionally loose to support multiple schema dialects without
+ * pulling them in at type level.
+ */
+export type AnySchema = unknown;
+/**
+ * Supported HTTP methods in OpenAPI/route registration.
+ */
 export type HttpMethod =
 	| "get"
 	| "post"
@@ -55,22 +62,32 @@ export type HttpMethod =
 	| "delete"
 	| "options"
 	| "head";
-
+/**
+ * Container for request validation schemas by segment.
+ */
 export type RequestSchemas = {
 	params?: AnySchema;
 	query?: AnySchema;
 	headers?: AnySchema;
 	body?: AnySchema;
 };
+/**
+ * Single response entry description.
+ */
 export type ResponseEntry = {
 	description: string;
 	contentType?: string;
 	schema?: AnySchema;
 };
+/**
+ * Map of HTTP status code -> response marker used for typing.
+ */
 export type ResponsesMap = Record<number, response.Marker<AnySchema>> & {
 	default?: response.Marker<AnySchema>;
 };
-
+/**
+ * Metadata captured for each Hono route to drive OpenAPI generation.
+ */
 export type RouteMeta = {
 	method: HttpMethod;
 	path: string; // Hono pattern, e.g. /users/:id
@@ -155,7 +172,7 @@ export function lazyRegister(
 	const openapiPath = toOpenAPIPath(path);
 
 	// Register with the OpenAPI builder
-	register({
+    register({
 		method,
 		path: openapiPath,
 		summary: partial.summary || `${method.toUpperCase()} ${openapiPath}`,
@@ -166,7 +183,7 @@ export function lazyRegister(
 		operationId: partial.operationId,
 		externalDocs: partial.externalDocs,
 		filePath: partial.filePath,
-		request: partial.request,
+		request: partial.request as unknown as RouteSchemas,
 		responses: partial.responses || {
 			200: response.of<AnySchema>({ description: "OK" }),
 		},
