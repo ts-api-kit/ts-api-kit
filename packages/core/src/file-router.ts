@@ -1,7 +1,6 @@
-import { createLogger } from "./utils/logger.ts";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
-import type { Hono, MiddlewareHandler } from "hono";
+import type { Hono, MiddlewareHandler, Handler } from "hono";
 import { dirname, resolve } from "pathe";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
@@ -13,6 +12,7 @@ import type {
 	RouteModuleExport,
 } from "./types.ts";
 import { readRouteJSDocForExport } from "./utils/jsdoc-extractor.ts";
+import { createLogger } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
@@ -144,7 +144,10 @@ export async function mountFileRouter(
 			const method = inferMethodFromExport(exportName);
 			if (!method) continue; // Skip non-HTTP method exports
 
-			const handler: any = value;
+			type HandlerWithConfig = Handler & {
+				__routeConfig?: { openapi?: Parameters<typeof mergeOpenAPI>[1] };
+			};
+			const handler = value as unknown as HandlerWithConfig;
 			if (typeof handler !== "function") continue;
 
 			// Get route config from handler metadata
@@ -206,7 +209,7 @@ export async function mountFileRouter(
 	if (routesMounted || mwsByDir.size) {
 		log.info(
 			`Mounted ${routesMounted} route${routesMounted === 1 ? "" : "s"}` +
-			(mwsByDir.size ? ` • ${mwsByDir.size} middleware` : ""),
+				(mwsByDir.size ? ` • ${mwsByDir.size} middleware` : ""),
 		);
 	}
 	return result;
