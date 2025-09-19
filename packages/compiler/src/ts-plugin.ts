@@ -1,6 +1,5 @@
 import type * as ts from "typescript";
 import { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
-import { loadPluginConfig } from "./plugin-config.ts";
 
 /**
  * Main entry point wired into the TypeScript compiler when the plugin is used
@@ -11,7 +10,7 @@ import { loadPluginConfig } from "./plugin-config.ts";
  * @returns A transformer factory passed back to the compiler
  */
 export default function openAPIPlugin(
-	program: ts.Program,
+	_program: ts.Program,
 	options: OpenAPIPluginOptions = {},
 ): (program: ts.Program) => void {
 	const plugin = createOpenAPIPlugin(options);

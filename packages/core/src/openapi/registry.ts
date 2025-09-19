@@ -1,6 +1,6 @@
 // Central registry for operations -> OpenAPI doc
 
-import console from "node:console";
+import { createLogger } from "../utils/logger.ts";
 import { OpenAPIBuilder, type OperationConfig } from "./builder.ts";
 import { response } from "./index.ts";
 
@@ -26,7 +26,8 @@ export const openapi: OpenAPIBuilder = new OpenAPIBuilder({
  * @param op - The operation configuration to register
  */
 export const register = (op: OperationConfig): void => {
-	console.log("Registering operation with filePath:", op.filePath);
+	const log = createLogger("openapi:registry");
+	log.debug("Registering operation with filePath:", op.filePath);
 	// optional: automatically add tags
 	op.tags?.forEach((t) => {
 		openapi.addTag(t);
@@ -39,9 +40,12 @@ export const register = (op: OperationConfig): void => {
  * 
  * @returns The OpenAPI specification object
  */
-export const getOpenApiJson = (): any => openapi.toJSON();
+export const getOpenApiJson = (): ReturnType<OpenAPIBuilder["toJSON"]> =>
+	openapi.toJSON();
 
 // Legacy compatibility - keep existing functions for backward compatibility
+/* deno-lint-ignore no-explicit-any */
+/* biome-ignore lint/suspicious/noExplicitAny: Compatibility layer across schema dialects */
 export type AnySchema = any;
 export type HttpMethod =
 	| "get"
@@ -73,7 +77,7 @@ export type RouteMeta = {
 	summary?: string;
 	description?: string;
 	tags?: string[];
-	security?: any[];
+	security?: Array<Record<string, string[]>>;
 	deprecated?: boolean;
 	operationId?: string;
 	externalDocs?: { url: string; description?: string };
@@ -117,8 +121,8 @@ export function buildOpenAPIDocument(_opts: {
 	title: string;
 	version: string;
 	servers?: { url: string; description?: string }[];
-	securitySchemes?: Record<string, any>;
-}): any {
+	securitySchemes?: Record<string, unknown>;
+}): ReturnType<OpenAPIBuilder["toJSON"]> {
 	// Use the new builder for enhanced OpenAPI generation
 	return getOpenApiJson();
 }
@@ -139,8 +143,8 @@ export function lazyRegister(
 		responses?: ResponsesMap;
 		summary?: string;
 		description?: string;
-		tags?: string[];
-		security?: any[];
+        tags?: string[];
+        security?: Array<Record<string, string[]>>;
 		deprecated?: boolean;
 		operationId?: string;
 		externalDocs?: { url: string; description?: string };

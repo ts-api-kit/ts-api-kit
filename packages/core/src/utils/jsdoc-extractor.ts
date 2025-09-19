@@ -1,16 +1,17 @@
 import fs from "node:fs";
+import type { HttpMethod } from "../openapi/registry.ts";
 
 export type RouteJSDocOA = {
 	summary?: string;
 	description?: string;
 	tags?: string[];
-	security?: any[];
+	security?: Array<Record<string, string[]>>;
 	deprecated?: boolean;
 	operationId?: string;
 	externalDocs?: { url: string; description?: string };
 	// Optionally, you can support @path and @method override (not recommended):
 	path?: string;
-	method?: string;
+	method?: HttpMethod;
 };
 
 export type ParameterJSDoc = {
@@ -84,7 +85,9 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 					const v = JSON.parse(json);
 					if (Array.isArray(v)) out.security = v;
 					else out.security = [v];
-				} catch {}
+					} catch {
+						// ignore invalid JSON in @security
+					}
 			} else {
 				out.security = [{}];
 			}
@@ -94,13 +97,26 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 			const rest = line.replace("@externalDocs", "").trim();
 			try {
 				const v = JSON.parse(rest);
-				if (v && typeof v === "object" && "url" in v) out.externalDocs = v;
-			} catch {}
+					if (v && typeof v === "object" && "url" in v) out.externalDocs = v;
+				} catch {
+					// ignore invalid JSON in @externalDocs
+				}
 		} else if (line.startsWith("@path")) {
 			out.path = line.replace("@path", "").trim();
-		} else if (line.startsWith("@method")) {
-			out.method = line.replace("@method", "").trim().toLowerCase();
+	} else if (line.startsWith("@method")) {
+		const m = line.replace("@method", "").trim().toLowerCase();
+		if (
+			m === "get" ||
+			m === "post" ||
+			m === "put" ||
+			m === "patch" ||
+			m === "delete" ||
+			m === "options" ||
+			m === "head"
+		) {
+			out.method = m as HttpMethod;
 		}
+	}
 	}
 
 	return out;

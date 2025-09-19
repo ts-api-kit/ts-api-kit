@@ -1,4 +1,4 @@
-import console from "node:console";
+import { createLogger } from "@ts-api-kit/core/utils";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
@@ -19,6 +19,7 @@ export class OpenAPIPlugin {
 	private checker: ts.TypeChecker;
 	private builder: OpenAPIBuilder;
 	private options: Required<OpenAPIPluginOptions>;
+    private log = createLogger("compiler:plugin");
 
 	constructor(program: ts.Program, options: OpenAPIPluginOptions = {}) {
 		this.program = program;
@@ -52,7 +53,7 @@ export class OpenAPIPlugin {
 		const openapiSpec = this.builder.toJSON();
 
 		fs.writeFileSync(outputPath, JSON.stringify(openapiSpec, null, 2));
-		console.log(`OpenAPI specification generated: ${outputPath}`);
+		this.log.info(`✅ OpenAPI specification generated: ${outputPath}`);
 	}
 
 	private processSourceFile(sourceFile: ts.SourceFile): void {
@@ -64,7 +65,7 @@ export class OpenAPIPlugin {
 		}
 
 		const relativePath = path.relative(process.cwd(), fileName);
-		console.log(`Processing route file: ${relativePath}`);
+		this.log.debug(`Processing route file: ${relativePath}`);
 
 		ts.forEachChild(sourceFile, (node) => {
 			if (ts.isExportAssignment(node) || ts.isExportDeclaration(node)) {
