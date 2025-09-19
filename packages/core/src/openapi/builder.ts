@@ -8,6 +8,9 @@ import type { response } from "./markers.ts";
 // Local, safer alias for generic response typing
 type AnySchema = unknown;
 
+/**
+ * Minimal JSON-compatible type used for OpenAPI payloads/examples.
+ */
 export type Json =
 	| Record<string, unknown>
 	| unknown[]
@@ -15,7 +18,9 @@ export type Json =
 	| number
 	| boolean
 	| null;
-
+/**
+ * HTTP method identifiers supported in Operation objects.
+ */
 export type OperationMethod =
 	| "get"
 	| "post"
@@ -24,7 +29,9 @@ export type OperationMethod =
 	| "delete"
 	| "options"
 	| "head";
-
+/**
+ * Common media types supported for request/response bodies.
+ */
 export type MediaType =
 	| "application/json"
 	| "text/plain"
@@ -168,13 +175,18 @@ export const vToJsonSchema = (
     }
 };
 
+/**
+ * Route-level Valibot schemas per segment.
+ */
 export type RouteSchemas = {
     params?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
     query?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
     headers?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
     body?: v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
 };
-
+/**
+ * Canonical representation of a single API operation.
+ */
 export type OperationConfig = {
 	method: OperationMethod;
 	path: string; // e.g. "/examples" or "/users/{id}"
@@ -192,7 +204,9 @@ export type OperationConfig = {
 	};
     responses: Record<number, response.Marker<AnySchema>>;
 };
-
+/**
+ * Options for the {@link OpenAPIBuilder} root document.
+ */
 export type OpenAPIBuilderOptions = {
 	title: string;
 	version: string;
@@ -350,7 +364,9 @@ export class OpenAPIBuilder {
             tags: [],
         };
     }
-
+    /**
+     * Adds a tag to the OpenAPI document if it does not exist yet.
+     */
     addTag(name: string, description?: string): void {
         const exists = this.doc.tags.some((t) => t.name === name);
         if (!exists) this.doc.tags.push({ name, description });
@@ -360,6 +376,9 @@ export class OpenAPIBuilder {
 		if (!this.paths[path]) this.paths[path] = {};
 	}
 
+    /**
+     * Adds or updates an operation under the given path and method.
+     */
     addOperation(op: OperationConfig): void {
         this.ensurePath(op.path);
         const method = op.method.toLowerCase();
@@ -408,7 +427,7 @@ export class OpenAPIBuilder {
         for (const [code, res] of Object.entries(op.responses ?? {})) {
             responses[code] = {
                 description: res.description,
-                headers: res.headers,
+                headers: res.headers as unknown as Record<string, { description?: string; schema?: Json } | ReferenceObject>,
                 content: {
                     [res.contentType ?? "application/json"]: {
                         schema: {}, // Empty schema for response markers - typing only
@@ -436,7 +455,9 @@ export class OpenAPIBuilder {
             responses,
         };
     }
-
+    /**
+     * Returns the OpenAPI document snapshot.
+     */
     toJSON(): OpenAPIDocument {
         return this.doc;
     }
