@@ -10,8 +10,9 @@
  * @module
  */
 
-import console from "node:console";
-import { Project, type Type, ts } from "ts-morph";
+import { type Project, type Type, ts } from "ts-morph";
+
+export { generateOpenAPI } from "./openapi-generator.ts";
 
 type OA =
 	| { type: "string"; format?: string; enum?: string[] }
@@ -84,10 +85,10 @@ function makeUniqueName(baseName: string): string {
 function apparent(t: Type<ts.Type>): Type<ts.Type> {
 	// resolve alias (p.ex. "User")
 	const aliasSym = t.getAliasSymbol();
-	if (aliasSym) {
-		const declared = checker.getDeclaredTypeOfSymbol(aliasSym);
-		return declared;
-	}
+	// if (aliasSym) {
+	// 	const declared = checker.getDeclaredTypeOfSymbol(aliasSym);
+	// 	return declared;
+	// }
 	// pega tipo aparente (resolve coisas como widenings)
 	return t.getApparentType();
 }
@@ -320,7 +321,7 @@ function toOpenApi(
 		for (const p of props) {
 			const pType = checker.getTypeOfSymbolAtLocation(
 				p,
-				p.getValueDeclaration() ?? p.getDeclarations()[0] ?? sourceFile,
+				p.getValueDeclaration() ?? p.getDeclarations()[0] //?? sourceFile,
 			);
 			const pDecl = p.getDeclarations()[0];
 			const isOpt = !!(p.getFlags() & ts.SymbolFlags.Optional);
@@ -413,63 +414,63 @@ function toOpenApi(
 	return { type: "unknown" };
 }
 
-interface User {
-	name: string;
-	age: number;
-	manager?: User; // Recursão: usuário pode ter um gerente
-	subordinates?: User[]; // Recursão: usuário pode ter subordinados
-}
+// interface User {
+// 	name: string;
+// 	age: number;
+// 	manager?: User; // Recursão: usuário pode ter um gerente
+// 	subordinates?: User[]; // Recursão: usuário pode ter subordinados
+// }
 
-interface TreeNode {
-	value: string;
-	children?: TreeNode[]; // Recursão: árvore com nós filhos
-}
+// interface TreeNode {
+// 	value: string;
+// 	children?: TreeNode[]; // Recursão: árvore com nós filhos
+// }
 
-function main() {
-	return {} as User;
-}
+// function main() {
+// 	return {} as User;
+// }
 
-const project = new Project({
-	tsConfigFilePath: "tsconfig.json",
-});
+// const project = new Project({
+// 	tsConfigFilePath: "tsconfig.json",
+// });
 
-// AJUSTE: caminho do source e nome da função
-const sourceFile = project.getSourceFileOrThrow("src/index.ts");
-const func = sourceFile.getFunctionOrThrow("main");
+// // // AJUSTE: caminho do source e nome da função
+// const sourceFile = project.getSourceFileOrThrow("src/index.ts");
+// const func = sourceFile.getFunctionOrThrow("main");
 
-// Type checker
-const checker = project.getTypeChecker();
+// // Type checker
+// const checker = project.getTypeChecker();
 
-// Tipo de retorno, resolvendo alias
-let ret = func.getReturnType();
-ret = apparent(ret);
+// // Tipo de retorno, resolvendo alias
+// let ret = func.getReturnType();
+// ret = apparent(ret);
 
-// Geração do schema com componentes
-const schema = toOpenApi(ret, checker, new Set(), true);
+// // Geração do schema com componentes
+// const schema = toOpenApi(ret, checker, new Set(), true);
 
-// Cria o OpenAPI completo com componentes
-const openapi = {
-	openapi: "3.1.0",
-	info: { title: "Demo", version: "1.0.0" },
-	paths: {
-		"/demo": {
-			get: {
-				responses: {
-					"200": {
-						description: "OK",
-						content: {
-							"application/json": {
-								schema,
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	components: {
-		schemas: Object.fromEntries(componentRegistry),
-	},
-};
+// // Cria o OpenAPI completo com componentes
+// const openapi = {
+// 	openapi: "3.1.0",
+// 	info: { title: "Demo", version: "1.0.0" },
+// 	paths: {
+// 		"/demo": {
+// 			get: {
+// 				responses: {
+// 					"200": {
+// 						description: "OK",
+// 						content: {
+// 							"application/json": {
+// 								schema,
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		},
+// 	},
+// 	components: {
+// 		schemas: Object.fromEntries(componentRegistry),
+// 	},
+// };
 
-console.log(JSON.stringify(openapi, null, 2));
+// console.log(JSON.stringify(openapi, null, 2));

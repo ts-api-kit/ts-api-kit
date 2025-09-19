@@ -1,181 +1,179 @@
-# Guia de Contribuição
+# Contributing Guide
 
-Obrigado por considerar contribuir com o TS API Core! Este documento fornece diretrizes para contribuições.
+Thanks for your interest in contributing to TS API Kit! This guide explains how to set up your environment, follow our conventions, and submit changes.
 
-## 🚀 Como Contribuir
+## 🚀 How to Contribute
 
-### 1. Fork e Clone
+### 1) Fork and Clone
 
 ```bash
-# Fork o repositório no GitHub
-# Clone seu fork
-git clone https://github.com/SEU_USUARIO/ts-api-core.git
-cd ts-api-core
+# Fork the repository on GitHub and clone your fork
+git clone https://github.com/ts-api-kit/ts-api-kit.git
+cd ts-api-kit
 
-# Adicione o repositório original como upstream
-git remote add upstream https://github.com/devzolo/ts-api-core.git
+# Add the original repository as upstream
+git remote add upstream https://github.com/ts-api-kit/ts-api-kit.git
 ```
 
-### 2. Configuração do Ambiente
+### 2) Environment Setup
+
+Prerequisites:
+
+- Node.js 18+
+- pnpm 9+
 
 ```bash
-# Instale as dependências
+# Install dependencies (workspace)
 pnpm install
 
-# Execute os testes
+# Run tests (workspace)
 pnpm test
 
-# Execute o linting
+# Lint and format (Biome)
 pnpm lint
-
-# Execute a formatação
 pnpm format
 ```
 
-### 3. Criando uma Branch
+Tip: This monorepo uses Nx. Top‑level scripts (dev, build, test, lint, format) orchestrate tasks across packages.
+
+### 3) Create a Branch
 
 ```bash
-# Crie uma branch para sua feature
-git checkout -b feature/nova-funcionalidade
+# Feature branch
+git checkout -b feat/your-feature
 
-# Ou para correção de bugs
-git checkout -b fix/correcao-bug
+# Or bugfix branch
+git checkout -b fix/your-bug
 ```
 
-### 4. Desenvolvimento
+### 4) Development Checklist
 
-- Siga as convenções de código existentes
-- Adicione testes para novas funcionalidades
-- Atualize a documentação quando necessário
-- Execute `pnpm lint` e `pnpm format` antes de commitar
+- Follow the existing code style (TypeScript, Biome rules)
+- Add tests for new behavior where it makes sense
+- Update docs/examples when applicable
+- Run `pnpm lint` and `pnpm format` before committing
 
-### 5. Commit
+### 5) Commit
 
 ```bash
-# Adicione suas mudanças
+# Stage changes
 git add .
 
-# Faça commit com mensagem descritiva
-git commit -m "feat: adiciona nova funcionalidade X"
+# Use Conventional Commits
+git commit -m "feat(core): add X with Y behavior"
 
-# Push para sua branch
-git push origin feature/nova-funcionalidade
+# Push your branch
+git push origin feat/your-feature
 ```
 
-### 6. Pull Request
+### 6) Pull Request
 
-- Abra um Pull Request no GitHub
-- Descreva claramente as mudanças
-- Referencie issues relacionadas
-- Aguarde a revisão
+- Open a PR against `main`
+- Explain the motivation and changes clearly
+- Reference related issues
+- Keep PRs small and focused when possible
 
-## 📝 Convenções
+## 📝 Conventions
 
-### Commits
+### Commits (Conventional Commits)
 
-Seguimos o [Conventional Commits](https://www.conventionalcommits.org/):
+We follow <https://www.conventionalcommits.org>. Common types:
 
-- `feat:` nova funcionalidade
-- `fix:` correção de bug
-- `docs:` mudanças na documentação
-- `style:` formatação, ponto e vírgula, etc.
-- `refactor:` refatoração de código
-- `test:` adição ou correção de testes
-- `chore:` mudanças em ferramentas, configurações, etc.
+- `feat:` new feature
+- `fix:` bug fix
+- `docs:` documentation only changes
+- `style:` formatting only (no code changes)
+- `refactor:` code change that neither fixes a bug nor adds a feature
+- `test:` add or fix tests
+- `chore:` tooling, config, build system changes
 
-### Código
+### Code Style
 
-- Use TypeScript
-- Siga as regras do Biome
-- Adicione JSDoc para funções públicas
-- Mantenha a consistência com o código existente
+- TypeScript everywhere
+- Biome for linting/formatting (`pnpm lint`, `pnpm format`)
+- Add JSDoc for public functions and complex logic where helpful
+- Keep the style consistent with surrounding code
 
-### Testes
+### Tests
 
-- Adicione testes para novas funcionalidades
-- Mantenha a cobertura de testes alta
-- Use nomes descritivos para os testes
+- Prefer targeted tests near affected code
+- Name tests clearly and concisely
+- Keep the test suite fast and reliable
 
-## 🐛 Reportando Bugs
+## 🐛 Reporting Bugs
 
-1. Verifique se o bug já foi reportado
-2. Use o template de issue
-3. Inclua informações sobre:
-   - Versão do Node.js
-   - Sistema operacional
-   - Passos para reproduzir
-   - Comportamento esperado vs atual
+1. Search existing issues first
+2. Use the bug report template
+3. Include details:
+   - Node.js version
+   - OS
+   - Steps to reproduce
+   - Expected vs. actual behavior
 
-## 💡 Sugerindo Funcionalidades
+## 💡 Feature Requests
 
-1. Verifique se a funcionalidade já foi sugerida
-2. Use o template de feature request
-3. Descreva claramente:
-   - O problema que resolve
-   - Como deveria funcionar
-   - Casos de uso
+1. Search existing discussions/issues first
+2. Use the feature request template
+3. Clearly describe:
+   - The problem it solves
+   - How it should work
+   - Example use‑cases
 
-## 📚 Documentação
+## 📚 Documentation
 
-- Mantenha a documentação atualizada
-- Use exemplos claros
-- Siga o estilo existente
-- Traduza para português quando apropriado
+- Keep docs in sync with behavior
+- Prefer small, focused examples
+- Follow the existing tone and structure
 
-## 🔧 Configuração de Desenvolvimento
+## 🔧 Development Setup
 
-### Estrutura do Projeto
+### Project Structure (simplified)
 
 ```text
-ts-api-core/
+ts-api-kit/
 ├── packages/
-│   ├── ts-api-core/          # Framework principal
-│   ├── ts-api-compiler/      # Compilador OpenAPI
-│   └── openapi-to-remote/    # Gerador SvelteKit
+│   ├── core/        # @ts-api-kit/core – framework runtime + OpenAPI helpers
+│   └── compiler/    # @ts-api-kit/compiler – OpenAPI generation tools
 ├── examples/
-│   ├── simple-example/       # Exemplo básico
-│   └── frontend/             # Exemplo SvelteKit
-├── docs/                     # Documentação
-└── .github/                  # CI/CD
+│   └── simple-example/  # Basic example app
+├── docs/             # Documentation site
+└── .github/          # CI/CD workflows
 ```
 
-### Scripts Disponíveis
+### Useful Scripts (workspace)
 
 ```bash
-# Desenvolvimento
-pnpm dev              # Executa todos os projetos em modo dev
-pnpm build            # Build todos os projetos
-pnpm test             # Executa todos os testes
-pnpm lint             # Executa linting
-pnpm format           # Formata código
-pnpm clean            # Limpa builds
+pnpm dev       # Run all packages in dev mode (Nx)
+pnpm build     # Build all
+pnpm test      # Run tests across packages
+pnpm lint      # Lint
+pnpm format    # Format
+pnpm clean     # Clean builds
 ```
 
-### Testando Mudanças
+### Trying Changes Locally
 
 ```bash
-# Teste o exemplo simples
+# Run the simple example
 cd examples/simple-example
 pnpm dev
 
-# Teste o frontend
-cd examples/frontend
-pnpm dev
-
-# Execute testes específicos
-pnpm test packages/ts-api-core
+# Or run specific package commands
+cd ../../packages/core
+pnpm build
+pnpm test
 ```
 
-## 📞 Suporte
+## 📞 Support
 
-- 💬 [GitHub Discussions](https://github.com/devzolo/ts-api-core/discussions)
-- 🐛 [GitHub Issues](https://github.com/devzolo/ts-api-core/issues)
-- 📧 Email: [contact@devzolo.com](mailto:contact@devzolo.com)
+- 💬 GitHub Discussions: <https://github.com/ts-api-kit/ts-api-kit/discussions>
+- 🐛 GitHub Issues: <https://github.com/ts-api-kit/ts-api-kit/issues>
+- 📧 Email: <contact@devzolo.com>
 
-## 📄 Licença
+## 📄 License
 
-Ao contribuir, você concorda que suas contribuições serão licenciadas sob a [Licença MIT](./LICENSE).
+By contributing, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
 
----
+—
 
-Obrigado por contribuir! 🎉
+Thanks for contributing! 🎉

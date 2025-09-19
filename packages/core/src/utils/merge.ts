@@ -1,19 +1,41 @@
+import type {
+	HttpMethod,
+	RequestSchemas,
+	ResponsesMap,
+} from "../openapi/registry.ts";
 import type { RouteJSDocOA } from "./jsdoc-extractor.ts";
 
 /**
  * Merges multiple OpenAPI documents into a single document.
- * 
+ *
  * @param jsdocOA - OpenAPI data from JSDoc comments
  * @param cfgOA - OpenAPI data from configuration
  * @param inferred - Inferred method and path data
  * @returns Merged OpenAPI document
  */
+type SecurityReq = Array<Record<string, string[]>>;
+type PartialOpenAPI = {
+	summary?: string;
+	description?: string;
+	tags?: string[];
+	security?: SecurityReq;
+	deprecated?: boolean;
+	operationId?: string;
+	externalDocs?: { url: string; description?: string };
+	request?: RequestSchemas;
+	responses?: ResponsesMap;
+	filePath?: string;
+	method?: HttpMethod;
+	path?: string;
+};
+type MergedOpenAPI = RouteJSDocOA & PartialOpenAPI;
+
 export function mergeOpenAPI(
 	jsdocOA: RouteJSDocOA,
-	cfgOA: any,
-	inferred: { method?: string; path?: string },
-): any {
-	const out: any = { ...jsdocOA };
+	cfgOA: PartialOpenAPI,
+	inferred: { method?: HttpMethod; path?: string },
+): MergedOpenAPI {
+	const out: MergedOpenAPI = { ...jsdocOA };
 
 	// Only override with config values if they exist
 	if (cfgOA) {

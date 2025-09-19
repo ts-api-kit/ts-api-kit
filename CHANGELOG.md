@@ -1,41 +1,45 @@
 # Changelog
+<!-- markdownlint-configure-file
+{
+  "MD024": { "siblings_only": true }
+}
+-->
 
-Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
+All notable changes to this project will be documented in this file.
 
-O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
-e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Adicionado
-- README principal do projeto
-- Arquivo de licença MIT
-- Changelog
-- Configuração de CI/CD com GitHub Actions
-- Arquivos .npmignore para controle de publicação
-- Configuração de testes com Vitest
-- Guia de contribuição
+### Added
+
+- Main project README
+- MIT license
+- Initial changelog
+- CI/CD setup with GitHub Actions
+- .npmignore files for publish control
+- Vitest testing setup
+- Contributing guide
+
+### Changed
+
+- core/openapi (builder, registry): stronger typings and minimal OpenAPI shapes
+- core/server: reduced explicit `any`, improved schema validation and response helpers
+- compiler/openapi-generator: JSON shape types and fully typed extractors
+- compiler/cli: typed setup options and safer plugin detection
+- docs: contributing guide translated to English and aligned with monorepo
 
 ## [0.1.0] - 2024-12-19
 
-### Adicionado
-- Framework principal `@ts-api-kit/core`
-- Compilador `ts-api-compiler` para geração OpenAPI
-- Gerador `openapi-to-remote` para SvelteKit
-- Exemplos de uso (simple-example e frontend)
-- Documentação completa
-- Suporte a roteamento por arquivos
-- Validação de schemas com Valibot
-- Middleware system
-- Integração com Hono
-- Geração automática de documentação OpenAPI
-- Remote Functions para SvelteKit
+### Added
 
-### Características
-- TypeScript nativo
-- Roteamento baseado em arquivos
-- Validação automática de schemas
-- Sistema de middlewares flexível
-- Geração de documentação OpenAPI
-- Integração com SvelteKit
-- Performance otimizada com Hono
+- `@ts-api-kit/core`: main framework runtime (Hono-based)
+- `@ts-api-kit/compiler`: OpenAPI generation tools
+- Example app: `examples/simple-example`
+- Documentation site
+- File-based routing
+- Schema validation with Valibot
+- Middleware system
+- Hono integration
+- Automatic OpenAPI document generation

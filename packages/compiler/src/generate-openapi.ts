@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import console from "node:console";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
+import { createLogger, setLogLevel } from "@ts-api-kit/core/utils";
 import * as ts from "typescript";
 import { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
 
@@ -14,6 +14,9 @@ interface CLIArgs {
 	version?: string;
 	description?: string;
 	help?: boolean;
+	verbose?: boolean;
+	quiet?: boolean;
+	logLevel?: string;
 }
 
 function parseArgs(): CLIArgs {
@@ -41,6 +44,17 @@ function parseArgs(): CLIArgs {
 			case "--description":
 				args.description = argv[++i];
 				break;
+			case "--verbose":
+			case "-v":
+				args.verbose = true;
+				break;
+			case "--quiet":
+			case "-q":
+				args.quiet = true;
+				break;
+			case "--log-level":
+				args.logLevel = argv[++i];
+				break;
 			case "--help":
 			case "-h":
 				args.help = true;
@@ -61,6 +75,9 @@ Options:
   --title <title>          API title (default: "API Documentation")
   --version <version>      API version (default: "1.0.0")
   --description <desc>     API description (default: "Generated API documentation")
+  -v, --verbose            Enable verbose (debug) logging
+  -q, --quiet              Only show errors
+  --log-level <level>      Log level: silent|error|warn|info|debug
   -h, --help              Show this help message
 
 Examples:
@@ -72,11 +89,17 @@ Examples:
 
 function main() {
 	const args = parseArgs();
+	const log = createLogger("compiler:cli");
 
 	if (args.help) {
 		printHelp();
 		process.exit(0);
 	}
+
+	// Configure logging level from CLI flags/env
+	if (args.logLevel) setLogLevel(args.logLevel);
+	else if (args.verbose) setLogLevel("debug");
+	else if (args.quiet) setLogLevel("error");
 
 	const projectPath = args.project || "./tsconfig.json";
 	const outputPath = args.output || "./openapi.json";
@@ -91,8 +114,8 @@ function main() {
 	const absoluteProjectPath = path.resolve(projectPath);
 	const absoluteOutputPath = path.resolve(outputPath);
 
-	console.log(`Loading TypeScript project from: ${absoluteProjectPath}`);
-	console.log(`Output will be written to: ${absoluteOutputPath}`);
+	log.debug(`Loading TypeScript project from: ${absoluteProjectPath}`);
+	log.debug(`Output will be written to: ${absoluteOutputPath}`);
 
 	try {
 		// Create TypeScript program
@@ -119,9 +142,9 @@ function main() {
 		const plugin = createOpenAPIPlugin(pluginOptions);
 		plugin(program);
 
-		console.log("✅ OpenAPI specification generated successfully!");
+		log.info("✅ OpenAPI specification generated successfully!");
 	} catch (error) {
-		console.error("❌ Error generating OpenAPI specification:", error);
+		log.error("❌ Error generating OpenAPI specification:", error);
 		process.exit(1);
 	}
 }

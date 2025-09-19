@@ -11,14 +11,15 @@
  * @module
  */
 
-import console from "node:console";
+import process from "node:process";
 import { serve } from "@hono/node-server";
 import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Context,MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
+import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
 import type { response } from "./openapi/markers.ts";
@@ -30,6 +31,7 @@ import {
 	type RequestSchemas,
 	type ResponsesMap,
 } from "./openapi/registry.ts";
+import { createLogger } from "./utils/logger.ts";
 /**
  * ──────────────────────────────────────────────────────────────────────────────
  * Error + tiny helpers
@@ -38,7 +40,7 @@ import {
 
 /**
  * Custom error class for application-specific errors with HTTP status codes.
- * 
+ *
  * @example
  * ```typescript
  * throw new AppError(404, "User not found", { userId: 123 });
@@ -173,7 +175,6 @@ export const json = <T>(data: T, init?: ResponseInit): Response =>
 		...init,
 	});
 
-
 /**
  * Serialises a typed route response to JSON while enforcing the declared
  * response codes and payload shapes.
@@ -214,11 +215,11 @@ export interface ResponseTools<T extends RouteSpec> {
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// JSX response with status validation
-	jsx: <S extends ValidStatusCodes<T>>(
-		data: any | Promise<any>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Promise<Response>;
+    // JSX response with status validation
+    jsx: <S extends ValidStatusCodes<T>>(
+        data: string | Promise<string>,
+        init?: Omit<ResponseInit, "status"> & { status?: S },
+    ) => Promise<Response>;
 
 	// Redirect response (always 3xx)
 	redirect: (url: string, status?: 301 | 302 | 303 | 307 | 308) => Response;
@@ -324,17 +325,17 @@ export interface ResponseTools<T extends RouteSpec> {
  * return jsx(<div>Hello World</div>);
  * ```
  */
-export const jsx = async (element: any): Promise<Response> => {
-	let html: string;
+export const jsx = async (element: unknown): Promise<Response> => {
+    let html: string;
 
-	if (typeof element === "string") {
-		html = element;
-	} else if (element instanceof Promise) {
-		html = await element;
-	} else {
-		// Assume it's a JSX element and render it using String()
-		html = String(element);
-	}
+    if (typeof element === "string") {
+        html = element;
+    } else if (element instanceof Promise) {
+        html = await element;
+    } else {
+        // Assume it's a JSX element and render it using String()
+        html = String(element);
+    }
 
 	return new Response(html, {
 		headers: { "Content-Type": "text/html" },
@@ -343,9 +344,9 @@ export const jsx = async (element: any): Promise<Response> => {
 
 // Helper functions to reduce code duplication
 const createJsonResponse = (
-	data: any,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+    data: unknown,
+    status: number,
+    init?: Omit<ResponseInit, "status">,
 ) =>
 	new Response(JSON.stringify(data), {
 		status,
@@ -580,8 +581,8 @@ export const jsxStream = (
  * @returns A streaming Response handled by Hono
  */
 export const jsxStreamHono = (
-	c: Context<any, any, {}>,
-	html: (rid: number | string) => string | Promise<string>,
+    c: Context,
+    html: (rid: number | string) => string | Promise<string>,
 ): Response => {
 	c.header("Content-Type", "text/html; charset=utf-8");
 	const htmlStream = renderToStream(html);
@@ -601,26 +602,32 @@ export const jsxStreamHono = (
 
 /**
  * Infers the input type from a StandardSchemaV1 schema.
- * 
+ *
  * @template S - The schema type
  * @returns The inferred input type
  */
-export type InferInput<S> = S extends StandardSchemaV1<any, any>
-	? StandardSchemaV1.InferInput<S>
-	: unknown;
+export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
+    ? StandardSchemaV1.InferInput<S>
+    : unknown;
 
 /**
  * Infers the output type from a StandardSchemaV1 schema.
- * 
+ *
  * @template S - The schema type
  * @returns The inferred output type
  */
-export type InferOutput<S> = S extends StandardSchemaV1<any, any>
-	? StandardSchemaV1.InferOutput<S>
-	: unknown;
+export type InferOutput<S> = S extends StandardSchemaV1<unknown, unknown>
+    ? StandardSchemaV1.InferOutput<S>
+    : unknown;
 
-function isStandard(s: any): s is AnySchema {
-	return s && typeof s === "object" && s["~standard"]?.version === 1;
+function isStandard(s: unknown): s is AnySchema {
+    return (
+        typeof s === "object" &&
+        s !== null &&
+        typeof (s as { [k: string]: unknown })["~standard"] === "object" &&
+        ((s as { [k: string]: unknown })["~standard"] as { version?: unknown })
+            ?.version === 1
+    );
 }
 
 // DX: shape de issue estável
@@ -633,17 +640,32 @@ export type Issue = {
 	kind?: string;
 };
 
-function formatIssues(raw: readonly any[] = []): Issue[] {
-	return raw.map((i) => ({
-		message: i.message,
-		path: Array.isArray(i.path)
-			? i.path.map((p: any) => (typeof p.key !== "undefined" ? p.key : p))
-			: [],
-		expected: i.expected,
-		received: i.received,
-		type: i.type,
-		kind: i.kind,
-	}));
+function formatIssues(raw: ReadonlyArray<unknown> = []): Issue[] {
+    type LooseIssue = {
+        message?: unknown;
+        path?: unknown;
+        expected?: unknown;
+        received?: unknown;
+        type?: unknown;
+        kind?: unknown;
+    };
+    return raw.map((i) => {
+        const ii = i as LooseIssue;
+        const path = Array.isArray(ii.path)
+            ? (ii.path as unknown[]).map((p) => {
+                  const pk = (p as { key?: unknown }).key;
+                  return typeof pk !== "undefined" ? (pk as string | number) : (p as string | number);
+              })
+            : [];
+        return {
+            message: String(ii.message ?? ""),
+            path,
+            expected: typeof ii.expected === "string" ? ii.expected : undefined,
+            received: ii.received,
+            type: typeof ii.type === "string" ? ii.type : undefined,
+            kind: typeof ii.kind === "string" ? ii.kind : undefined,
+        };
+    });
 }
 
 // Validação por parte (params/query/headers/body) com localização
@@ -652,8 +674,8 @@ async function validatePart<S extends AnySchema>(
 	schema: S | undefined,
 	value: unknown,
 ): Promise<{
-	value: any;
-	issues: null | { location: typeof where; issues: Issue[] };
+    value: unknown;
+    issues: null | { location: typeof where; issues: Issue[] };
 }> {
 	if (!schema) return { value, issues: null };
 	if (!isStandard(schema)) {
@@ -668,20 +690,23 @@ async function validatePart<S extends AnySchema>(
 		};
 	}
 
-	let r = (schema as any)["~standard"].validate(value);
+    const std = (schema as { [k: string]: unknown })["~standard"] as {
+        validate: (v: unknown) => unknown | Promise<unknown>;
+    };
+    let r = std.validate(value);
 	if (r instanceof Promise) r = await r;
 
 	const fail = r as StandardSchemaV1.FailureResult;
-	if ((fail as any).issues) {
-		return {
-			value: null,
-			issues: { location: where, issues: formatIssues(fail.issues) },
-		};
-	}
-	return {
-		value: (r as StandardSchemaV1.SuccessResult<any>).value,
-		issues: null,
-	};
+    if ("issues" in (fail as object)) {
+        return {
+            value: null,
+            issues: { location: where, issues: formatIssues(fail.issues) },
+        };
+    }
+    return {
+        value: (r as StandardSchemaV1.SuccessResult<unknown>).value,
+        issues: null,
+    };
 }
 
 /**
@@ -718,10 +743,10 @@ export function toStandardSchema<S extends AnySchema>(
  * Each property represents a different part of the HTTP request.
  */
 export type SchemaDefinition = {
-	query?: AnySchema;
-	params?: AnySchema;
-	headers?: AnySchema;
-	body?: AnySchema;
+    query?: StandardSchemaV1<unknown, unknown>;
+    params?: StandardSchemaV1<unknown, unknown>;
+    headers?: StandardSchemaV1<unknown, unknown>;
+    body?: StandardSchemaV1<unknown, unknown>;
 };
 
 // Tipos de OpenAPI (reusados no registry)
@@ -767,19 +792,19 @@ type EffectiveSchemas<T extends RouteSpec> = {
 };
 
 export type HandlerContext<T extends RouteSpec> = {
-	params: EffectiveSchemas<T>["params"] extends AnySchema
-		? InferOutput<EffectiveSchemas<T>["params"]>
-		: Record<string, any>;
-	query: EffectiveSchemas<T>["query"] extends AnySchema
-		? InferOutput<EffectiveSchemas<T>["query"]>
-		: Record<string, any>;
-	headers: EffectiveSchemas<T>["headers"] extends AnySchema
-		? InferOutput<EffectiveSchemas<T>["headers"]>
-		: Record<string, string>;
-	body: EffectiveSchemas<T>["body"] extends AnySchema
-		? InferOutput<EffectiveSchemas<T>["body"]>
-		: unknown;
-	response: ResponseTools<T>;
+    params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["params"]>
+        : Record<string, unknown>;
+    query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["query"]>
+        : Record<string, unknown>;
+    headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["headers"]>
+        : Record<string, string>;
+    body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["body"]>
+        : unknown;
+    response: ResponseTools<T>;
 };
 
 // Response type inference utilities
@@ -835,12 +860,12 @@ export type InferResponse<
 		: unknown
 	: unknown;
 
-function pickContentType(req: any): string {
-	return (req.header("content-type") || "").toLowerCase();
+function pickContentType(req: { header: (name: string) => string | undefined }): string {
+    return (req.header("content-type") || "").toLowerCase();
 }
 
-function coerceQuery(obj: Record<string, any>) {
-	const out: Record<string, any> = {};
+function coerceQuery(obj: Record<string, unknown>) {
+    const out: Record<string, unknown> = {};
 	for (const [k, v] of Object.entries(obj)) {
 		if (v === "") {
 			out[k] = undefined;
@@ -895,12 +920,12 @@ export function createHandler<T extends RouteSpec>(
 			if (!registered && spec && (spec as WithOpenAPI).openapi) {
 				// Hono expõe o padrão de rota em c.req.routePath em v4+; fallback para c.req.path
 				const method = c.req.method.toLowerCase() as HttpMethod;
-				const path = (c.req as any).routePath ?? c.req.path; // pode ser "/users/:id"
+				const path = routePath(c) ?? c.req.path; // pode ser "/users/:id"
 				const { req, res, meta } = extractSchemas(spec);
-				// console.log(`Registering OpenAPI route: ${method} ${path}`);
-				// console.log(`Request schemas:`, req);
-				// console.log(`Response schemas:`, res);
-				// console.log(`Meta:`, meta);
+				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
+				// this.log.info(`Request schemas:`, req);
+				// this.log.info(`Response schemas:`, res);
+				// this.log.info(`Meta:`, meta);
 				lazyRegister(method, path, { request: req, responses: res, ...meta });
 				registered = true;
 			}
@@ -949,16 +974,16 @@ export function createHandler<T extends RouteSpec>(
 				Boolean,
 			) as Array<{ location: string; issues: Issue[] }>;
 			if (details.length) {
-				return c.json(
-					{
-						error: {
-							code: "VALIDATION_ERROR",
-							message: "Invalid request payload",
-							details,
-						},
-					},
-					400,
-				);
+                return createJsonResponse(
+                    {
+                        error: {
+                            code: "VALIDATION_ERROR",
+                            message: "Invalid request payload",
+                            details,
+                        },
+                    },
+                    400,
+                );
 			}
 
 			const result = await handler({
@@ -970,8 +995,8 @@ export function createHandler<T extends RouteSpec>(
 
 			if (result instanceof Response) return result;
 
-			let status = 200;
-			let body = result as any;
+        let status = 200;
+        let body: unknown = result;
 			if (
 				body &&
 				typeof body === "object" &&
@@ -981,20 +1006,19 @@ export function createHandler<T extends RouteSpec>(
 				status = Number(body.status) || 200;
 				body = body.body;
 			}
-			return c.json(body, status as any);
-		} catch (err: any) {
-			console.error("Handler error:", err);
+        return createJsonResponse(body, status);
+		} catch (err) {
 			if (err instanceof AppError) {
-				return c.json(
-					{
-						error: {
-							code: "APP_ERROR",
-							message: err.message,
-							...(err.meta ? { meta: err.meta } : {}),
-						},
-					},
-					err.code as any,
-				);
+                return createJsonResponse(
+                    {
+                        error: {
+                            code: "APP_ERROR",
+                            message: err.message,
+                            ...(err.meta ? { meta: err.meta } : {}),
+                        },
+                    },
+                    err.code,
+                );
 			}
 			return c.json(
 				{ error: { code: "INTERNAL", message: "Internal Server Error" } },
@@ -1044,28 +1068,48 @@ export function createSchema<T extends SchemaDefinition>(
 			body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
 		} {
 			return {
-				query: schema.query
-					? toStandardSchema(
-							schema.query as AnySchema,
-							"hono-file-router:query",
-						)
-					: undefined,
-				params: schema.params
-					? toStandardSchema(
-							schema.params as AnySchema,
-							"hono-file-router:params",
-						)
-					: undefined,
-				headers: schema.headers
-					? toStandardSchema(
-							schema.headers as AnySchema,
-							"hono-file-router:headers",
-						)
-					: undefined,
-				body: schema.body
-					? toStandardSchema(schema.body as AnySchema, "hono-file-router:body")
-					: undefined,
-			} as any;
+                query: schema.query
+                    ? toStandardSchema(
+                            schema.query as AnySchema,
+                            "hono-file-router:query",
+                        )
+                    : undefined,
+                params: schema.params
+                    ? toStandardSchema(
+                            schema.params as AnySchema,
+                            "hono-file-router:params",
+                        )
+                    : undefined,
+                headers: schema.headers
+                    ? toStandardSchema(
+                            schema.headers as AnySchema,
+                            "hono-file-router:headers",
+                        )
+                    : undefined,
+                body: schema.body
+                    ? toStandardSchema(
+                            schema.body as AnySchema,
+                            "hono-file-router:body",
+                        )
+                    : undefined,
+            } as {
+                query?: StandardSchemaV1<
+                    InferInput<T["query"]>,
+                    InferOutput<T["query"]>
+                >;
+                params?: StandardSchemaV1<
+                    InferInput<T["params"]>,
+                    InferOutput<T["params"]>
+                >;
+                headers?: StandardSchemaV1<
+                    InferInput<T["headers"]>,
+                    InferOutput<T["headers"]>
+                >;
+                body?: StandardSchemaV1<
+                    InferInput<T["body"]>,
+                    InferOutput<T["body"]>
+                >;
+            };
 		},
 	};
 }
@@ -1073,37 +1117,42 @@ export function createSchema<T extends SchemaDefinition>(
 /**
  * Creates a GET route handler with type-safe request/response validation.
  */
-export const get: any = createHandler<RouteSpec>;
+type RouteFactory = <T extends RouteSpec>(
+    spec: T | undefined,
+    handler: (context: HandlerContext<NonNullable<T>>) => unknown | Promise<unknown>,
+) => (c: Context) => Promise<Response>;
+
+export const get: RouteFactory = createHandler;
 
 /**
  * Creates a POST route handler with type-safe request/response validation.
  */
-export const post: any = createHandler<RouteSpec>;
+export const post: RouteFactory = createHandler;
 
 /**
  * Creates a PUT route handler with type-safe request/response validation.
  */
-export const put: any = createHandler<RouteSpec>;
+export const put: RouteFactory = createHandler;
 
 /**
  * Creates a PATCH route handler with type-safe request/response validation.
  */
-export const patch: any = createHandler<RouteSpec>;
+export const patch: RouteFactory = createHandler;
 
 /**
  * Creates a DELETE route handler with type-safe request/response validation.
  */
-export const del: any = createHandler<RouteSpec>;
+export const del: RouteFactory = createHandler;
 
 /**
  * Creates an OPTIONS route handler with type-safe request/response validation.
  */
-export const options: any = createHandler<RouteSpec>;
+export const options: RouteFactory = createHandler;
 
 /**
  * Creates a HEAD route handler with type-safe request/response validation.
  */
-export const head: any = createHandler<RouteSpec>;
+export const head: RouteFactory = createHandler;
 
 /**
  * Flexible wrapper that converts either a spec + handler pair or a standalone
@@ -1114,7 +1163,7 @@ export const head: any = createHandler<RouteSpec>;
  * @param filePath - Optional override for the source file path used in docs
  * @returns Hono handler augmented with route configuration metadata
  */
-export function handle<T extends RouteSpec = {}>(
+export function handle<T extends RouteSpec = RouteSpec>(
 	specOrHandler:
 		| T
 		| ((context: HandlerContext<NonNullable<T>>) => unknown | Promise<unknown>),
@@ -1151,13 +1200,13 @@ export function handle<T extends RouteSpec = {}>(
 		effectiveFilePath = handlerOrFilePath as string | undefined;
 	}
 
-	const openapi = (spec as any).openapi;
+    const openapi = (spec as { openapi?: unknown }).openapi;
 	if (openapi) {
 		// Use provided filePath or fall back to current file path from context
 		const finalFilePath = effectiveFilePath || getCurrentFilePath();
-		if (finalFilePath) {
-			(openapi as any).filePath = finalFilePath;
-		}
+            if (finalFilePath) {
+                (openapi as { filePath?: string }).filePath = finalFilePath;
+            }
 		// Don't register here - let file-router handle it after method inference
 		// register(openapi);
 	}
@@ -1192,7 +1241,7 @@ export function handle<T extends RouteSpec = {}>(
 		return json(result);
 	});
 
-	(h as any).__routeConfig = spec ?? {};
+        (h as unknown as { __routeConfig: T }).__routeConfig = spec ?? ({} as T);
 	return h as typeof h & { __routeConfig: T };
 }
 
@@ -1202,6 +1251,8 @@ export function handle<T extends RouteSpec = {}>(
 export default class Server {
 	private app = new Hono();
 	private port: number = parseInt(process.env.PORT ?? "3000", 10);
+
+	private log = createLogger("core:server");
 
 	constructor(port?: number) {
 		this.port = port ?? this.port;
@@ -1255,7 +1306,7 @@ export default class Server {
 					});
 				}
 			} catch (error) {
-				console.error("OpenAPI generation error:", error);
+				this.log.error("OpenAPI generation error:", error);
 				return c.json(
 					{
 						error: "Failed to generate OpenAPI document",
@@ -1280,7 +1331,7 @@ export default class Server {
 
 		this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
 		this.app.onError((err, c) => {
-			console.error(err);
+			this.log.error(err);
 			return c.json({ error: "Internal Server Error" }, 500);
 		});
 	}
@@ -1291,11 +1342,13 @@ export default class Server {
 	): Promise<void> {
 		await this.setupApp();
 		await mountFileRouter(this.app, { routesDir, basePath });
+		// const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
+		// generateOpenAPI(routesDir, "openapi.json");
 	}
 
 	start(port?: number): void {
 		const finalPort = port ?? this.port;
-		console.log(
+		this.log.info(
 			`🚀 Listening on http://localhost:${finalPort}  •  Docs: http://localhost:${finalPort}/docs`,
 		);
 		serve({ fetch: this.app.fetch, port: finalPort });
