@@ -16,6 +16,30 @@ import { createLogger } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
+
+/**
+ * Builds a module specifier for dynamic import that works at runtime without
+ * relying on import maps. In development we append a cache-busting query to
+ * force re-evaluation when files change; in production we import the stable URL.
+ */
+function toModuleUrl(file: string): string {
+    const base = pathToFileURL(file).href;
+    if ((process.env.NODE_ENV || "").toLowerCase() === "development") {
+        return `${base}?v=${Date.now()}`;
+    }
+    return base;
+}
+
+async function safeDynamicImport<T = unknown>(specifier: string): Promise<T> {
+    try {
+        // Attempt import as-is (may include dev cache-busting query)
+        return (await import(specifier)) as T;
+    } catch {
+        // Fallback: strip any query/hash for environments that disallow it
+        const clean = specifier.split("?")[0].split("#")[0];
+        return (await import(clean)) as T;
+    }
+}
 /**
  * Options to drive file-based route discovery and mounting.
  *
@@ -122,10 +146,10 @@ export async function mountFileRouter(
 
 	log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
-	for (const file of sortByDepthAsc(mwFiles)) {
-		const dir = dirname(file);
-		const modUrl = `${pathToFileURL(file).href}?v=${Date.now()}`;
-		const mod = (await import(modUrl)) as Partial<MiddlewareModule>;
+    for (const file of sortByDepthAsc(mwFiles)) {
+        const dir = dirname(file);
+        const modUrl = toModuleUrl(file);
+        const mod = (await safeDynamicImport<Partial<MiddlewareModule>>(modUrl));
 		const list = toArray(
 			mod.middleware as MiddlewareHandler | MiddlewareHandler[],
 		);
@@ -135,8 +159,8 @@ export async function mountFileRouter(
 		mwsByDir.set(dir, arr);
 	}
 	let routesMounted = 0;
-	for (const file of sortByDepthDesc(routeFiles)) {
-		const modUrl = `${pathToFileURL(file).href}?v=${Date.now()}`;
+    for (const file of sortByDepthDesc(routeFiles)) {
+        const modUrl = toModuleUrl(file);
 
 		log.debug(`Processing file: ${file}`);
 		log.debug(`Module URL: ${modUrl}`);
@@ -148,7 +172,7 @@ export async function mountFileRouter(
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
-		const mod = (await import(modUrl)) as RouteModuleExport;
+        const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
 		log.debug(`Module exports:`, Object.keys(mod));
 
 		// Support both named exports and default export
