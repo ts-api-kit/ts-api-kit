@@ -89,5 +89,5 @@ export function createLogger(namespace?: string): Logger {
 }
 
 // Default logger without namespace for quick use
-export const log = createLogger("ts-api-kit");
+export const log: Logger = createLogger("ts-api-kit");
 
