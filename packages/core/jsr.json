@@ -1,0 +1,27 @@
+{
+  "$schema": "https://jsr.io/schema/config-file.v1.json",
+  "name": "@ts-api-kit/core",
+  "version": "0.1.8",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./openapi": "./src/openapi/index.ts",
+    "./utils": "./src/utils/index.ts",
+    "./node": "./src/node/index.ts"
+  },
+  "license": "MIT",
+  "publish": {
+    "include": [
+      "LICENSE",
+      "README.md",
+      "src/**/*.ts"
+    ],
+    "exclude": [
+      "src/**/*.test.ts",
+      "src/**/*.spec.ts",
+      "src/**/*_test.ts",
+      "src/**/__tests__/**",
+      "src/**/__test__/**"
+    ]
+  }
+}

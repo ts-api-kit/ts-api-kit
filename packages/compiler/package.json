@@ -24,12 +24,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/devzolo/ts-api-core.git",
-    "directory": "packages/ts-api-compiler"
+    "url": "https://github.com/ts-api-kit/ts-api-kit.git",
+    "directory": "packages/compiler"
   },
-  "homepage": "https://github.com/devzolo/ts-api-core#readme",
+  "homepage": "https://github.com/ts-api-kit/ts-api-kit#readme",
   "bugs": {
-    "url": "https://github.com/devzolo/ts-api-core/issues"
+    "url": "https://github.com/ts-api-kit/ts-api-kit/issues"
   },
   "publishConfig": {
     "access": "public"

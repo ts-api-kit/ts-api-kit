@@ -1,15 +1,10 @@
 {
   "name": "workspace",
-  "version": "0.1.8",
   "private": true,
   "type": "module",
-  "main": "dist",
   "author": "devzolo <contact@devzolo.com>",
   "license": "MIT",
-  "repository": "https://github.com/devzolo/ts-api-kit",
-  "publishConfig": {
-    "@devzolo:registry": "https://npm.pkg.github.com"
-  },
+  "repository": "https://github.com/ts-api-kit/ts-api-kit",
   "workspaces": [
     "docs",
     "apps/*",
@@ -26,20 +21,27 @@
     "format:fix": "nx run-many -t format:fix",
     "test": "nx run-many -t test",
     "check": "nx run-many -t check",
-    "setup:github-actions": "node scripts/setup-github-actions.js",
+    "changeset": "changeset",
+    "release:version": "changeset version && node scripts/sync-jsr-versions.mjs",
+    "sync:jsr-versions": "node scripts/sync-jsr-versions.mjs",
+    "release:publish": "pnpm publish:jsr",
+    "release:verify": "pnpm build && pnpm test && pnpm lint && node scripts/sync-jsr-versions.mjs --check && pnpm release:dry-run",
+    "release:dry-run": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec jsr publish --dry-run --allow-slow-types",
+    "release": "pnpm release:version && pnpm -r install --no-frozen-lockfile && pnpm release:publish",
     "publish:jsr": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec jsr publish --allow-slow-types",
     "publish:core": "cd packages/core && npx jsr publish --allow-slow-types",
     "publish:compiler": "cd packages/compiler && npx jsr publish --allow-slow-types"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.27.8",
     "@biomejs/biome": "^2.2.2",
     "@typescript/native-preview": "7.0.0-dev.20250907.1",
     "nx": "21.4.1",
     "typescript": "^5.6.2"
   },
   "engines": {
-    "npm": ">=7.0.0",
-    "node": ">=14.0.0"
+    "npm": ">=8.0.0",
+    "node": ">=20.0.0"
   },
   "packageManager": "pnpm@10.15.1+sha512.34e538c329b5553014ca8e8f4535997f96180a1d0f614339357449935350d924e22f8614682191264ec33d1462ac21561aff97f6bb18065351c162c7e8f6de67",
   "pnpm": {
