@@ -1,13 +1,13 @@
-# TS API Core
+# TS API Kit — Core
 
-A modern TypeScript framework for APIs built on Hono with file‑based routing, Valibot validation, and automatic OpenAPI generation.
+Core framework for APIs built on Hono with file‑based routing, Valibot validation, and automatic OpenAPI generation.
 
 ## Features
 
-- 🚀 File‑based routing with zero boilerplate
-- 🔒 Valibot schema validation (StandardSchema‑compatible)
-- 📜 Auto‑documented routes via OpenAPI + Scalar UI
-- 🧰 Native TypeScript DX and strong typing end‑to‑end
+- 📁 File-based routing with zero boilerplate
+- ✅ Valibot schema validation (StandardSchema-compatible)
+- 🧾 Auto-documented routes via OpenAPI + Scalar UI
+- 🧰 Native TypeScript DX and strong typing end-to-end
 - 🧩 Simple, composable middlewares
 - ⚡ Hono runtime performance
 
@@ -30,7 +30,7 @@ import { handle } from "@ts-api-kit/core";
 export const GET = handle(() => ({ hello: "world" }));
 ```
 
-The second argument returns any JSON‑serialisable value. If you need more control, use the typed response helpers found under `context.response`.
+The second argument returns any JSON-serialisable value. If you need more control, use the typed response helpers found under `context.response`.
 
 ### 2) Validating inputs with Valibot
 
@@ -136,7 +136,7 @@ export const PUT = handle(
 );
 ```
 
-### 5) Route‑level middleware
+### 5) Route-level middleware
 
 ```ts
 // src/routes/+middleware.ts
@@ -148,15 +148,15 @@ export const middleware: MiddlewareHandler = async (c, next) => {
 };
 ```
 
-## File‑based Routing
+## File-based Routing
 
 Folder names map to paths. Dynamic segments use square brackets and rest parameters:
 
 ```text
 src/routes
-├── +route.ts           →   /
-├── users/+route.ts     →   /users
-├── users/[id]/+route.ts →  /users/:id
+├── +route.ts              →   /
+├── users/+route.ts        →   /users
+├── users/[id]/+route.ts   →   /users/:id
 └── blog/[...slug]/+route.ts → /blog/:slug{.*}
 ```
 
@@ -228,3 +228,4 @@ v.object({ id: v.pipe(v.string(), v.transform(Number)) });
 ## License
 
 MIT
+
