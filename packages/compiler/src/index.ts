@@ -197,8 +197,8 @@ function isRecordLike(t: Type): { key: Type; value: Type } | null {
 export function toOpenApi(
 	t: Type,
 	checker: ReturnType<Project["getTypeChecker"]>,
-	seen = new Set<number>(),
-	shouldCreateComponent = false,
+	seen: Set<number> = new Set<number>(),
+	shouldCreateComponent: boolean = false,
 ): OA {
 	// evita ciclos
     const id = (t.compilerType as { id?: number }).id;
