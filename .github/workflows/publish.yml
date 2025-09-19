@@ -36,9 +36,9 @@ jobs:
       - name: Publish @ts-api-kit/core
         run: |
           cd packages/core
-          npx jsr publish
+          npx jsr publish --allow-dirty
 
       - name: Publish @ts-api-kit/compiler
         run: |
           cd packages/compiler
-          npx jsr publish
+          npx jsr publish --allow-dirty
