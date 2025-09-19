@@ -1,14 +1,5 @@
 {
-  "name": "@ts-api-kit/core",
-  "version": "0.1.8",
-  "description": "A modern TypeScript framework for building APIs with file-based routing, OpenAPI generation, and Valibot schema validation. Perfect for creating type-safe REST APIs with automatic documentation.",
-  "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts",
-    "./openapi": "./src/openapi/index.ts",
-    "./utils": "./src/utils/index.ts",
-    "./node": "./src/node/index.ts"
-  },
+  "$schema": "https://deno.land/x/deno@2.0.0/cli/schemas/config-file.v1.json",
   "imports": {
     "@hono/node-server": "npm:@hono/node-server@^1.11.3",
     "@kitajs/html": "npm:@kitajs/html@^4.2.9",
@@ -18,44 +9,5 @@
     "fast-glob": "npm:fast-glob@^3.3.2",
     "hono": "npm:hono@^4.6.7",
     "pathe": "npm:pathe@^2.0.3"
-  },
-  "peerDependencies": {
-    "valibot": "npm:valibot@^1.1.0"
-  },
-  "files": [
-    "src",
-    "README.md",
-    "LICENSE"
-  ],
-  "keywords": [
-    "typescript",
-    "api",
-    "framework",
-    "hono",
-    "valibot",
-    "file-based-routing",
-    "openapi",
-    "validation"
-  ],
-  "author": "devzolo <contact@devzolo.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ts-api-kit/ts-api-kit.git",
-    "directory": "packages/core"
-  },
-  "homepage": "https://github.com/ts-api-kit/ts-api-kit#readme",
-  "bugs": {
-    "url": "https://github.com/ts-api-kit/ts-api-kit/issues"
-  },
-  "runtimes": {
-    "deno": "1.0.0",
-    "node": "18.0.0",
-    "browser": "1.0.0"
-  },
-  "compatibility": {
-    "deno": "1.0.0",
-    "node": "18.0.0",
-    "browser": "1.0.0"
   }
 }
