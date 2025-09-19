@@ -20,3 +20,11 @@ export default function openAPIPlugin(
 // Export for programmatic usage
 export { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
 export { loadPluginConfig } from "./plugin-config.ts";
+/**
+ * TypeScript compiler plugin entry for @ts-api-kit/compiler.
+ *
+ * Wires the OpenAPI generator into tsc so that builds can emit
+ * documentation based on route metadata.
+ *
+ * @module
+ */

@@ -197,117 +197,133 @@ export const typedJson = <T extends RouteSpec, S extends number = 200>(
  * can emit consistent `Response` objects without repeating boilerplate.
  */
 export interface ResponseTools<T extends RouteSpec> {
-	// Typed JSON response with status validation
+	/**
+	 * JSON response with type-safe status validation.
+	 */
 	json: <S extends ValidStatusCodes<T>>(
 		data: ResponseForStatus<T, S>,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// Text response with status validation
+	/**
+	 * Plain text response with type-safe status validation.
+	 */
 	text: <S extends ValidStatusCodes<T>>(
 		data: string,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// HTML response with status validation
+	/**
+	 * HTML response with type-safe status validation.
+	 */
 	html: <S extends ValidStatusCodes<T>>(
 		data: string,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-    // JSX response with status validation
+    /**
+     * JSX/HTML response, accepting a string or async string.
+     */
     jsx: <S extends ValidStatusCodes<T>>(
         data: string | Promise<string>,
         init?: Omit<ResponseInit, "status"> & { status?: S },
     ) => Promise<Response>;
 
-	// Redirect response (always 3xx)
+	/**
+	 * Redirect response. Only 3xx status codes are allowed.
+	 */
 	redirect: (url: string, status?: 301 | 302 | 303 | 307 | 308) => Response;
 
-	// File response with status validation
+	/**
+	 * Binary/file response with type-safe status validation.
+	 */
 	file: <S extends ValidStatusCodes<T>>(
 		data: Blob | ArrayBuffer | Uint8Array,
 		filename?: string,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// Stream response with status validation
+	/**
+	 * Streaming response with type-safe status validation.
+	 */
 	stream: <S extends ValidStatusCodes<T>>(
 		stream: ReadableStream,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// Error response with status validation
+	/**
+	 * Error JSON response with a specific status code.
+	 */
 	error: <S extends ValidStatusCodes<T>>(
 		message: string,
 		status: S,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// OK response (200) - only if 200 is defined in responses
+	/** OK (200) response. Requires 200 in route responses. */
 	ok: <S extends 200>(
 		data: ResponseForStatus<T, S>,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// Created response (201) - only if 201 is defined in responses
+	/** Created (201) response. Requires 201 in route responses. */
 	created: <S extends 201>(
 		data: ResponseForStatus<T, S>,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Accepted response (202) - only if 202 is defined in responses
+	/** Accepted (202) response. Requires 202 in route responses. */
 	accepted: <S extends 202>(
 		data: ResponseForStatus<T, S>,
 		init?: Omit<ResponseInit, "status"> & { status?: S },
 	) => Response;
 
-	// No content response (204) - only if 204 is defined in responses
+	/** No Content (204) response. Requires 204 in route responses. */
 	noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) => Response;
 
-	// Bad request response (400) - only if 400 is defined in responses
+	/** Bad Request (400) response. Requires 400 in route responses. */
 	badRequest: <_S extends 400>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Unauthorized response (401) - only if 401 is defined in responses
+	/** Unauthorized (401) response. Requires 401 in route responses. */
 	unauthorized: <_S extends 401>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Forbidden response (403) - only if 403 is defined in responses
+	/** Forbidden (403) response. Requires 403 in route responses. */
 	forbidden: <_S extends 403>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Not found response (404) - only if 404 is defined in responses
+	/** Not Found (404) response. Requires 404 in route responses. */
 	notFound: <_S extends 404>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Conflict response (409) - only if 409 is defined in responses
+	/** Conflict (409) response. Requires 409 in route responses. */
 	conflict: <_S extends 409>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Unprocessable entity response (422) - only if 422 is defined in responses
+	/** Unprocessable Entity (422) response. Requires 422 in route responses. */
 	unprocessableEntity: <_S extends 422>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Too many requests response (429) - only if 429 is defined in responses
+	/** Too Many Requests (429) response. Requires 429 in route responses. */
 	tooManyRequests: <_S extends 429>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
 	) => Response;
 
-	// Internal server error response (500) - only if 500 is defined in responses
+	/** Internal Server Error (500) response. Requires 500 in route responses. */
 	internalError: <_S extends 500>(
 		message?: string,
 		init?: Omit<ResponseInit, "status">,
@@ -631,6 +647,9 @@ function isStandard(s: unknown): s is AnySchema {
 }
 
 // DX: shape de issue estável
+/**
+ * Normalised validation issue shape used in error responses.
+ */
 export type Issue = {
 	message: string;
 	path: (string | number)[];
@@ -723,7 +742,10 @@ export function toStandardSchema<S extends AnySchema>(
 ): StandardSchemaV1<InferInput<S>, InferOutput<S>> {
 	if (!isStandard(schema))
 		throw new Error("Schema must implement StandardSchemaV1");
-	const std = (schema as any)["~standard"];
+    const std = (schema as { [k: string]: unknown })["~standard"] as {
+        vendor?: string;
+        [k: string]: unknown;
+    };
 	return {
 		"~standard": {
 			...std,
@@ -791,6 +813,9 @@ type EffectiveSchemas<T extends RouteSpec> = {
 			: never;
 };
 
+/**
+ * Strongly-typed context passed to route handlers after validation.
+ */
 export type HandlerContext<T extends RouteSpec> = {
     params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<unknown, unknown>
         ? InferOutput<EffectiveSchemas<T>["params"]>
@@ -807,11 +832,15 @@ export type HandlerContext<T extends RouteSpec> = {
     response: ResponseTools<T>;
 };
 
-// Response type inference utilities
+/**
+ * Extracts the concrete type from a response marker.
+ */
 export type InferResponseType<T> = T extends { __phantom__: infer U }
 	? U
 	: never;
-
+/**
+ * Maps the response markers declared in the route spec to plain types.
+ */
 export type InferResponses<T extends RouteSpec> = T extends {
 	openapi: { responses: infer R };
 }
@@ -819,12 +848,15 @@ export type InferResponses<T extends RouteSpec> = T extends {
 			[K in keyof R]: R[K] extends { __phantom__: infer U } ? U : never;
 		}
 	: never;
-
+/**
+ * Union of all declared response payloads for the route.
+ */
 export type ValidResponse<T extends RouteSpec> =
 	| InferResponses<T>[keyof InferResponses<T>]
 	| Response;
-
-// Helper type to extract response type for a specific status code
+/**
+ * Extracts the response payload type for a specific status code.
+ */
 export type ResponseForStatus<
 	T extends RouteSpec,
 	S extends number,
@@ -835,8 +867,9 @@ export type ResponseForStatus<
 			: never
 		: never
 	: never;
-
-// Helper type to extract valid status codes
+/**
+ * Extracts the declared status codes for the route.
+ */
 export type ValidStatusCodes<T extends RouteSpec> = T extends {
 	openapi: { responses: infer R };
 }
@@ -844,7 +877,9 @@ export type ValidStatusCodes<T extends RouteSpec> = T extends {
 		? keyof R
 		: never
 	: never;
-
+/**
+ * Extracts the response type for a given status or falls back to default.
+ */
 export type InferResponse<
 	T extends RouteSpec,
 	S extends number = 200,
@@ -1258,7 +1293,7 @@ export default class Server {
 		this.port = port ?? this.port;
 	}
 
-	private async setupApp(): Promise<void> {
+	private setupApp(): void {
 		this.app.use("*", async (c, next) => {
 			c.res.headers.set("x-powered-by", "hono-file-router");
 			await next();
@@ -1318,16 +1353,16 @@ export default class Server {
 		});
 
 		// ── UI do Scalar em /docs
-		this.app.get(
-			"/docs",
-			Scalar({
-				theme: "default",
-				layout: "modern",
-				spec: {
-					url: "/openapi.json",
-				},
-			} as any),
-		);
+			this.app.get(
+				"/docs",
+				(Scalar({
+					theme: "default",
+					layout: "modern",
+					spec: {
+						url: "/openapi.json",
+					},
+				} as unknown as Parameters<typeof Scalar>[0]) as unknown as MiddlewareHandler),
+			);
 
 		this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
 		this.app.onError((err, c) => {
@@ -1340,7 +1375,7 @@ export default class Server {
 		routesDir: string = "./src/routes",
 		basePath = "",
 	): Promise<void> {
-		await this.setupApp();
+		this.setupApp();
 		await mountFileRouter(this.app, { routesDir, basePath });
 		// const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
 		// generateOpenAPI(routesDir, "openapi.json");
