@@ -13,6 +13,8 @@ export namespace response {
         readonly __brand__?: "openapi.response";
         /** Phantom type that captures the payload type. */
         readonly __type__?: T;
+        /** Preferred schema component name for this body. */
+        name?: string;
         /** Human-readable response description. */
         description?: string;
         /** MIME type for the response body (default: application/json). */

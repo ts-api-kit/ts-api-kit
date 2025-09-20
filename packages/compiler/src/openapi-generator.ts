@@ -36,6 +36,103 @@ type OperationMap = Record<string, Operation>;
 
 const log = createLogger("compiler:generator");
 
+// Simple schema registry to support $ref and avoid recursion on self-referential types
+const schemaRegistry = (() => {
+    let typeKeyToName = new Map<string, string>();
+    let usedNames = new Set<string>();
+    let schemas: Record<string, Json> = {};
+    let preferredNames = new Map<string, string>();
+
+    function reset() {
+        typeKeyToName = new Map();
+        usedNames = new Set();
+        schemas = {};
+        preferredNames = new Map();
+    }
+
+    function sanitizeName(name: string): string {
+        // Remove quotes and non-word chars to keep component keys stable
+        const base = name.replace(/["']/g, "").replace(/[^\w.-]/g, "_");
+        return base || "Anonymous";
+    }
+
+    function ensureUniqueName(base: string): string {
+        let name = sanitizeName(base);
+        if (!usedNames.has(name)) {
+            usedNames.add(name);
+            return name;
+        }
+        let i = 2;
+        while (usedNames.has(`${name}_${i}`)) i++;
+        const finalName = `${name}_${i}`;
+        usedNames.add(finalName);
+        return finalName;
+    }
+
+    function getOrRegister(typeKey: string, baseName: string): string {
+        const preferred = preferredNames.get(typeKey);
+        if (preferred && typeKeyToName.has(typeKey)) {
+            // already registered; keep the existing mapping
+            return typeKeyToName.get(typeKey)!;
+        }
+        const existing = typeKeyToName.get(typeKey);
+        if (existing) return existing;
+        const unique = ensureUniqueName(preferred ?? baseName);
+        typeKeyToName.set(typeKey, unique);
+        return unique;
+    }
+
+    function setSchema(name: string, schema: Json) {
+        schemas[name] = schema;
+    }
+
+    function has(typeKey: string) {
+        return typeKeyToName.has(typeKey);
+    }
+
+    function getRefByKey(typeKey: string): { $ref: string } | null {
+        const name = typeKeyToName.get(typeKey);
+        if (!name) return null;
+        return { $ref: `#/components/schemas/${name}` };
+    }
+
+    function getSchemas() {
+        return schemas;
+    }
+
+    function setPreferredName(typeKey: string, name: string) {
+        preferredNames.set(typeKey, name);
+    }
+
+    return { reset, getOrRegister, setSchema, has, getRefByKey, getSchemas, setPreferredName };
+})();
+
+function getTypeIdentity(
+    type: ts.Type,
+    checker: ts.TypeChecker,
+): { key: string; name: string } | null {
+    const sym: ts.Symbol | undefined = (type.aliasSymbol ?? type.symbol) as
+        | ts.Symbol
+        | undefined;
+    if (!sym) return null;
+    // Some anonymous object types appear as "__type"
+    const rawName = (sym.getName ? sym.getName() : String((sym as any).escapedName)) || "Anonymous";
+    if (rawName === "__type") return null;
+
+    let key: string;
+    const sid = (sym as any)?.id;
+    if (typeof sid === "number") {
+        key = `sym#${sid}`;
+    } else {
+        try {
+            key = checker.getFullyQualifiedName(sym);
+        } catch {
+            key = rawName;
+        }
+    }
+    return { key, name: rawName };
+}
+
 // Function to process a route file and extract HTTP operations
 function processRouteFile(
     sourceFile: ts.SourceFile,
@@ -749,6 +846,27 @@ function extractResponseTypeFromMarker(
     const typeArg = typeArgs[0];
     const type = checker.getTypeAtLocation(typeArg);
 
+    // If response.of<T>(meta) has a { name: string } or { schemaName: string }, use it as preferred component name
+    let preferredName: string | undefined;
+    const callArgs = responseExpression.arguments;
+    if (callArgs.length > 0 && ts.isObjectLiteralExpression(callArgs[0])) {
+        for (const prop of callArgs[0].properties) {
+            if (!ts.isPropertyAssignment(prop)) continue;
+            const propName = getPropertyName(prop.name);
+            if (!propName) continue;
+            if (propName === "name" || propName === "schemaName") {
+                if (ts.isStringLiteral(prop.initializer)) {
+                    preferredName = prop.initializer.text;
+                    break;
+                }
+            }
+        }
+    }
+    if (preferredName) {
+        const id = getTypeIdentity(type, checker);
+        if (id) schemaRegistry.setPreferredName(id.key, preferredName);
+    }
+
 	// Convert TypeScript type to JSON Schema
     return convertTypeToJsonSchema(type, checker);
 }
@@ -861,54 +979,68 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): Json {
         }
 
 		// Handle interface/object types
+        const identity = getTypeIdentity(type, checker);
+
+        // If type is named (interface/type alias), use components + $ref to avoid recursion
+        let componentName: string | null = null;
+        if (identity) {
+            if (schemaRegistry.has(identity.key)) {
+                const ref = schemaRegistry.getRefByKey(identity.key);
+                if (ref) return ref;
+            }
+            componentName = schemaRegistry.getOrRegister(identity.key, identity.name);
+        }
+
         const properties: Record<string, Json> = {};
         const required: string[] = [];
 
-		const symbol = type.symbol;
-		if (symbol?.members) {
-			for (const [name, member] of symbol.members) {
-				const nameStr = name as string;
-				if (member.flags & ts.SymbolFlags.Property) {
-                    if (!member.valueDeclaration) continue;
-                    const propertyType = checker.getTypeOfSymbolAtLocation(
-                        member,
-                        member.valueDeclaration,
-                    );
-					const propertySchema = convertTypeToJsonSchema(propertyType, checker);
+        // Prefer checker API to list structural properties (handles mapped types like Omit/Pick/Partial)
+        const propSymbols = checker.getPropertiesOfType(type);
+        for (const prop of propSymbols) {
+            const nameStr = prop.getName();
+            const decl = (prop.valueDeclaration ?? (prop.declarations && prop.declarations[0])) as
+                | ts.Declaration
+                | undefined;
+            const propType = checker.getTypeOfSymbolAtLocation(
+                prop,
+                (decl as ts.Node) ?? (identity?.name ? (type.symbol?.declarations?.[0] as ts.Node) : (prop as unknown as ts.Node)),
+            );
+            const propertySchema = convertTypeToJsonSchema(propType, checker);
 
-					// Extract JSDoc from the property declaration
-					const declaration = member.valueDeclaration;
-					if (declaration && ts.isPropertySignature(declaration)) {
-						const jsDoc = extractJSDocFromNode(declaration);
+            // Attach description from JSDoc when a declaration is available
+            if (decl) {
+                const jsDoc = extractJSDocFromNode(decl);
+                if (jsDoc.description && typeof propertySchema === "object" && propertySchema !== null) {
+                    (propertySchema as Record<string, unknown>).description = jsDoc.description;
+                }
+            }
 
-						// Add JSDoc information to the schema
-                        if (jsDoc.description) {
-                            if (
-                                typeof propertySchema === "object" &&
-                                propertySchema !== null
-                            ) {
-                                (propertySchema as Record<string, unknown>).description =
-                                    jsDoc.description;
-                            }
-                        }
+            // Determine optionality: explicit optional flag or union including undefined
+            let isOptional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
+            if (!isOptional && (propType.flags & ts.TypeFlags.Union)) {
+                const union = propType as ts.UnionType;
+                isOptional = union.types.some((t) => (t.flags & ts.TypeFlags.Undefined) !== 0);
+            }
+            if (!isOptional) {
+                required.push(nameStr);
+            }
 
-						// Check if property is optional
-						if (!declaration.questionToken) {
-							required.push(nameStr);
-						}
-					}
+            properties[nameStr] = propertySchema;
+        }
 
-					properties[nameStr] = propertySchema;
-				}
-			}
-		}
+        const objectSchema: Json = {
+            type: "object",
+            properties,
+            required: required.length > 0 ? required : undefined,
+        };
 
-		return {
-			type: "object",
-			properties,
-			required: required.length > 0 ? required : undefined,
-		};
-	}
+        if (componentName) {
+            schemaRegistry.setSchema(componentName, objectSchema);
+            return { $ref: `#/components/schemas/${componentName}` };
+        }
+
+        return objectSchema;
+    }
 
 	// Handle union types
 	if (type.flags & ts.TypeFlags.Union) {
@@ -957,6 +1089,8 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 	log.debug(`Output will be written to: ${outputPath}`);
 
 	try {
+		// Reset registry for a fresh run
+		schemaRegistry.reset();
 		// Read tsconfig.json to get the include patterns
 		const configFile = ts.readConfigFile(projectPath, ts.sys.readFile);
 		const parsedConfig = ts.parseJsonConfigFileContent(
@@ -1049,6 +1183,9 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 				log.debug(`No operations found for path: ${openapiPath}`);
 			}
 		}
+
+		// Attach collected component schemas
+		openapiSpec.components.schemas = schemaRegistry.getSchemas();
 
 		// Write the generated OpenAPI spec to file
 		fs.writeFileSync(outputPath, JSON.stringify(openapiSpec, null, 2));
