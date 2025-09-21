@@ -23,6 +23,7 @@ import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
 import type { ResponseMarker } from "./openapi/markers.ts";
+import { getRootOverrides } from "./openapi/overrides.ts";
 import {
 	type AnySchema,
 	buildOpenAPIDocument,
@@ -1320,6 +1321,30 @@ export default class Server {
 				if (fs.existsSync(openapiPath)) {
 					const openapiContent = fs.readFileSync(openapiPath, "utf-8");
 					const doc = JSON.parse(openapiContent);
+					// Merge root-level overrides from serve({ openapi })
+					try {
+						const o = getRootOverrides();
+						if (o) {
+							if (o.info)
+								(doc as any).info = { ...(doc as any).info, ...o.info };
+							if (o.servers?.length) (doc as any).servers = o.servers;
+							if (o.tags?.length) (doc as any).tags = o.tags as any;
+							if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+							if (o.components?.securitySchemes) {
+								(doc as any).components = (doc as any).components || {};
+								(doc as any).components.securitySchemes = {
+									...((doc as any).components?.securitySchemes || {}),
+									...o.components.securitySchemes,
+								};
+							}
+							if (o.extensions) {
+								for (const [k, v] of Object.entries(o.extensions)) {
+									if (k.startsWith("x-"))
+										(doc as Record<string, unknown>)[k] = v as any;
+								}
+							}
+						}
+					} catch {}
 
 					return c.json(doc, {
 						headers: {
@@ -1337,6 +1362,30 @@ export default class Server {
 						version: "1.0.0",
 						servers: [{ url: `${serverUrl.protocol}//${serverUrl.host}` }],
 					});
+					// Merge root-level overrides from serve({ openapi })
+					try {
+						const o = getRootOverrides();
+						if (o) {
+							if (o.info)
+								(doc as any).info = { ...(doc as any).info, ...o.info };
+							if (o.servers?.length) (doc as any).servers = o.servers;
+							if (o.tags?.length) (doc as any).tags = o.tags as any;
+							if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+							if (o.components?.securitySchemes) {
+								(doc as any).components = (doc as any).components || {};
+								(doc as any).components.securitySchemes = {
+									...((doc as any).components?.securitySchemes || {}),
+									...o.components.securitySchemes,
+								};
+							}
+							if (o.extensions) {
+								for (const [k, v] of Object.entries(o.extensions)) {
+									if (k.startsWith("x-"))
+										(doc as Record<string, unknown>)[k] = v as any;
+								}
+							}
+						}
+					} catch {}
 					return c.json(doc, {
 						headers: {
 							"Access-Control-Allow-Origin": "*",
