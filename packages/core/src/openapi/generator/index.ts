@@ -1243,9 +1243,9 @@ export async function generateOpenAPI(projectPath: string, outputPath: string): 
 		} = {
 			openapi: "3.1.0",
 			info: {
-				title: "Simple Example API",
-				version: "1.0.0",
-				description: "Generated from TypeScript routes",
+				title: "{{pkg.displayName}}",
+				version: "{{pkg.version}}",
+				description: "{{pkg.description}}",
 			},
 			paths: {},
 			components: {

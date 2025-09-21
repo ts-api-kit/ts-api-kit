@@ -23,8 +23,9 @@ export type RootOverrides = Partial<{
 }>;
 
 let ROOT_OVERRIDES: RootOverrides | undefined;
+let DEFAULT_OVERRIDES: RootOverrides | undefined;
 type OpenAPIMode = "file" | "memory" | "none";
-let OPENAPI_MODE: OpenAPIMode = "none";
+let OPENAPI_MODE: OpenAPIMode = "memory";
 let OPENAPI_FILE_PATH: string = "./openapi.json";
 let OPENAPI_PROJECT_PATH: string = "./tsconfig.json";
 
@@ -34,6 +35,14 @@ export function setRootOverrides(v?: RootOverrides): void {
 
 export function getRootOverrides(): RootOverrides | undefined {
   return ROOT_OVERRIDES;
+}
+
+export function setDefaultOpenAPI(v?: RootOverrides): void {
+  DEFAULT_OVERRIDES = v && Object.keys(v).length ? v : undefined;
+}
+
+export function getDefaultOpenAPI(): RootOverrides | undefined {
+  return DEFAULT_OVERRIDES;
 }
 
 export function setOpenAPIGeneration(options?: { mode?: OpenAPIMode; path?: string; project?: string }): void {

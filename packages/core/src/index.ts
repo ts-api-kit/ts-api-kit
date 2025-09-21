@@ -21,7 +21,7 @@ export { default as Server } from "./server.ts";
 
 import ApiServer from "@ts-api-kit/core/server";
 import { generateOpenAPI } from "./openapi/generator/index.ts";
-import { type RootOverrides, setOpenAPIGeneration, setRootOverrides } from "./openapi/overrides.ts";
+import { type RootOverrides, setDefaultOpenAPI, setOpenAPIGeneration, setRootOverrides } from "./openapi/overrides.ts";
 
 interface ServeOptions {
 	port?: number;
@@ -52,10 +52,26 @@ export const serve = async (options: ServeOptions = {}) => {
 	// Store doc-level overrides for later merge when serving /openapi.json
 	setRootOverrides(options.openapi);
 
+	// Load defaults from package.json's `openapi` key if present
+	try {
+		const fs = await import("node:fs");
+		const path = await import("node:path");
+    const process = await import("node:process");
+		const pkgPath = path.join(process.cwd(), "package.json");
+		if (fs.existsSync(pkgPath)) {
+			const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+			if (pkg && typeof pkg === "object" && pkg.openapi && typeof pkg.openapi === "object") {
+				setDefaultOpenAPI(pkg.openapi as RootOverrides);
+			}
+		}
+	} catch {
+    // noop
+  }
+
 	await server.configureRoutes(routesDir);
 
 	// Decide generation mode and file path
-	const outOpt = typeof options.openapiOutput === "string" ? { mode: options.openapiOutput } : (options.openapiOutput ?? { mode: "none" });
+    const outOpt = typeof options.openapiOutput === "string" ? { mode: options.openapiOutput } : (options.openapiOutput ?? { mode: "memory" });
 	const mode = (outOpt.mode ?? "none") as "file" | "memory" | "none";
 const outPath = outOpt.path || "./openapi.json";
 setOpenAPIGeneration({ mode, path: outPath, project: outOpt.project || "./tsconfig.json" });
@@ -69,3 +85,6 @@ setOpenAPIGeneration({ mode, path: outPath, project: outOpt.project || "./tsconf
 	}
 	server.start(port);
 };
+
+// Alias amigável para configurar defaults do documento
+export const setOpenAPIDefaults = setDefaultOpenAPI;

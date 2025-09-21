@@ -23,14 +23,18 @@ import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
 import type { ResponseMarker } from "./openapi/markers.ts";
-import { getOpenAPIGeneration, getRootOverrides } from "./openapi/overrides.ts";
 import {
-	type AnySchema,
-	buildOpenAPIDocument,
-	type HttpMethod,
-	lazyRegister,
-	type RequestSchemas,
-	type ResponsesMap,
+  getDefaultOpenAPI,
+  getOpenAPIGeneration,
+  getRootOverrides,
+} from "./openapi/overrides.ts";
+import {
+  type AnySchema,
+  buildOpenAPIDocument,
+  type HttpMethod,
+  lazyRegister,
+  type RequestSchemas,
+  type ResponsesMap,
 } from "./openapi/registry.ts";
 import { createLogger } from "./utils/logger.ts";
 /**
@@ -48,13 +52,13 @@ import { createLogger } from "./utils/logger.ts";
  * ```
  */
 export class AppError extends Error {
-	public code: number;
-	public meta?: Record<string, unknown>;
-	constructor(code: number, message: string, meta?: Record<string, unknown>) {
-		super(message);
-		this.code = code;
-		this.meta = meta;
-	}
+  public code: number;
+  public meta?: Record<string, unknown>;
+  constructor(code: number, message: string, meta?: Record<string, unknown>) {
+    super(message);
+    this.code = code;
+    this.meta = meta;
+  }
 }
 
 /**
@@ -71,11 +75,11 @@ export class AppError extends Error {
  * ```
  */
 export const error = (
-	code: number,
-	message: string,
-	meta?: Record<string, unknown>,
+  code: number,
+  message: string,
+  meta?: Record<string, unknown>
 ): never => {
-	throw new AppError(code, message, meta);
+  throw new AppError(code, message, meta);
 };
 
 let currentContext: Context | null = null;
@@ -88,7 +92,7 @@ let currentFilePath: string | null = null;
  * @param c - The Hono context to set as current
  */
 export const setRequestContext = (c: Context): void => {
-	currentContext = c;
+  currentContext = c;
 };
 
 /**
@@ -98,7 +102,7 @@ export const setRequestContext = (c: Context): void => {
  * @param filePath - The file path to set as current
  */
 export const setCurrentFilePath = (filePath: string): void => {
-	currentFilePath = filePath;
+  currentFilePath = filePath;
 };
 
 /**
@@ -107,7 +111,7 @@ export const setCurrentFilePath = (filePath: string): void => {
  * @returns The current file path or null if not set
  */
 export const getCurrentFilePath = (): string | null => {
-	return currentFilePath;
+  return currentFilePath;
 };
 
 /**
@@ -116,45 +120,45 @@ export const getCurrentFilePath = (): string | null => {
  * @returns The current request event object
  */
 export const getRequestEvent = (): {
-	rid: MiddlewareHandler;
-	cookies: {
-		get: (name: string) => string | undefined;
-		set: (name: string, value: string) => void;
-	};
-	locals: { title: string };
-	headers?: Record<string, string>;
-	url?: string;
-	method?: string;
+  rid: MiddlewareHandler;
+  cookies: {
+    get: (name: string) => string | undefined;
+    set: (name: string, value: string) => void;
+  };
+  locals: { title: string };
+  headers?: Record<string, string>;
+  url?: string;
+  method?: string;
 } => {
-	const rid = requestId();
-	if (!currentContext) {
-		return {
-			rid,
-			cookies: {
-				get: (_name: string) => undefined,
-				set: (_name: string, _value: string) => {},
-			},
-			locals: { title: "Default Title" },
-		} as const;
-	}
+  const rid = requestId();
+  if (!currentContext) {
+    return {
+      rid,
+      cookies: {
+        get: (_name: string) => undefined,
+        set: (_name: string, _value: string) => {},
+      },
+      locals: { title: "Default Title" },
+    } as const;
+  }
 
-	return {
-		rid,
-		cookies: {
-			get: (name: string) =>
-				currentContext?.req
-					.header("cookie")
-					?.split(";")
-					.find((c) => c.trim().startsWith(`${name}=`))
-					?.split("=")[1],
-			set: (name: string, value: string) =>
-				currentContext?.header("Set-Cookie", `${name}=${value}`),
-		},
-		locals: { title: "Default Title" },
-		headers: Object.fromEntries(Object.entries(currentContext?.req.header())),
-		url: currentContext?.req.url,
-		method: currentContext?.req.method,
-	} as const;
+  return {
+    rid,
+    cookies: {
+      get: (name: string) =>
+        currentContext?.req
+          .header("cookie")
+          ?.split(";")
+          .find((c) => c.trim().startsWith(`${name}=`))
+          ?.split("=")[1],
+      set: (name: string, value: string) =>
+        currentContext?.header("Set-Cookie", `${name}=${value}`),
+    },
+    locals: { title: "Default Title" },
+    headers: Object.fromEntries(Object.entries(currentContext?.req.header())),
+    url: currentContext?.req.url,
+    method: currentContext?.req.method,
+  } as const;
 };
 
 Response;
@@ -171,10 +175,10 @@ Response;
  * ```
  */
 export const json = <T>(data: T, init?: ResponseInit): Response =>
-	new Response(JSON.stringify(data), {
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
+  new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
 
 /**
  * Serialises a typed route response to JSON while enforcing the declared
@@ -185,150 +189,150 @@ export const json = <T>(data: T, init?: ResponseInit): Response =>
  * @returns A Response containing the JSON representation of the payload
  */
 export const typedJson = <T extends RouteSpec, S extends number = 200>(
-	data: ResponseForStatus<T, S>,
-	init?: ResponseInit,
+  data: ResponseForStatus<T, S>,
+  init?: ResponseInit
 ): Response =>
-	new Response(JSON.stringify(data), {
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
+  new Response(JSON.stringify(data), {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
 
 /**
  * Bag of strongly typed response helpers injected into route handlers so they
  * can emit consistent `Response` objects without repeating boilerplate.
  */
 export interface ResponseTools<T extends RouteSpec> {
-	/**
-	 * JSON response with type-safe status validation.
-	 */
-	json: <S extends ValidStatusCodes<T>>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /**
+   * JSON response with type-safe status validation.
+   */
+  json: <S extends ValidStatusCodes<T>>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/**
-	 * Plain text response with type-safe status validation.
-	 */
-	text: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /**
+   * Plain text response with type-safe status validation.
+   */
+  text: <S extends ValidStatusCodes<T>>(
+    data: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/**
-	 * HTML response with type-safe status validation.
-	 */
-	html: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /**
+   * HTML response with type-safe status validation.
+   */
+  html: <S extends ValidStatusCodes<T>>(
+    data: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/**
-	 * JSX/HTML response, accepting a string or async string.
-	 */
-	jsx: <S extends ValidStatusCodes<T>>(
-		data: string | Promise<string>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Promise<Response>;
+  /**
+   * JSX/HTML response, accepting a string or async string.
+   */
+  jsx: <S extends ValidStatusCodes<T>>(
+    data: string | Promise<string>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Promise<Response>;
 
-	/**
-	 * Redirect response. Only 3xx status codes are allowed.
-	 */
-	redirect: (url: string, status?: 301 | 302 | 303 | 307 | 308) => Response;
+  /**
+   * Redirect response. Only 3xx status codes are allowed.
+   */
+  redirect: (url: string, status?: 301 | 302 | 303 | 307 | 308) => Response;
 
-	/**
-	 * Binary/file response with type-safe status validation.
-	 */
-	file: <S extends ValidStatusCodes<T>>(
-		data: Blob | ArrayBuffer | Uint8Array,
-		filename?: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /**
+   * Binary/file response with type-safe status validation.
+   */
+  file: <S extends ValidStatusCodes<T>>(
+    data: Blob | ArrayBuffer | Uint8Array,
+    filename?: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/**
-	 * Streaming response with type-safe status validation.
-	 */
-	stream: <S extends ValidStatusCodes<T>>(
-		stream: ReadableStream,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /**
+   * Streaming response with type-safe status validation.
+   */
+  stream: <S extends ValidStatusCodes<T>>(
+    stream: ReadableStream,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/**
-	 * Error JSON response with a specific status code.
-	 */
-	error: <S extends ValidStatusCodes<T>>(
-		message: string,
-		status: S,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /**
+   * Error JSON response with a specific status code.
+   */
+  error: <S extends ValidStatusCodes<T>>(
+    message: string,
+    status: S,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** OK (200) response. Requires 200 in route responses. */
-	ok: <S extends 200>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /** OK (200) response. Requires 200 in route responses. */
+  ok: <S extends 200>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/** Created (201) response. Requires 201 in route responses. */
-	created: <S extends 201>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Created (201) response. Requires 201 in route responses. */
+  created: <S extends 201>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Accepted (202) response. Requires 202 in route responses. */
-	accepted: <S extends 202>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
+  /** Accepted (202) response. Requires 202 in route responses. */
+  accepted: <S extends 202>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => Response;
 
-	/** No Content (204) response. Requires 204 in route responses. */
-	noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) => Response;
+  /** No Content (204) response. Requires 204 in route responses. */
+  noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) => Response;
 
-	/** Bad Request (400) response. Requires 400 in route responses. */
-	badRequest: <_S extends 400>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Bad Request (400) response. Requires 400 in route responses. */
+  badRequest: <_S extends 400>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Unauthorized (401) response. Requires 401 in route responses. */
-	unauthorized: <_S extends 401>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Unauthorized (401) response. Requires 401 in route responses. */
+  unauthorized: <_S extends 401>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Forbidden (403) response. Requires 403 in route responses. */
-	forbidden: <_S extends 403>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Forbidden (403) response. Requires 403 in route responses. */
+  forbidden: <_S extends 403>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Not Found (404) response. Requires 404 in route responses. */
-	notFound: <_S extends 404>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Not Found (404) response. Requires 404 in route responses. */
+  notFound: <_S extends 404>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Conflict (409) response. Requires 409 in route responses. */
-	conflict: <_S extends 409>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Conflict (409) response. Requires 409 in route responses. */
+  conflict: <_S extends 409>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Unprocessable Entity (422) response. Requires 422 in route responses. */
-	unprocessableEntity: <_S extends 422>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Unprocessable Entity (422) response. Requires 422 in route responses. */
+  unprocessableEntity: <_S extends 422>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Too Many Requests (429) response. Requires 429 in route responses. */
-	tooManyRequests: <_S extends 429>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Too Many Requests (429) response. Requires 429 in route responses. */
+  tooManyRequests: <_S extends 429>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 
-	/** Internal Server Error (500) response. Requires 500 in route responses. */
-	internalError: <_S extends 500>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
+  /** Internal Server Error (500) response. Requires 500 in route responses. */
+  internalError: <_S extends 500>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => Response;
 }
 
 /**
@@ -343,77 +347,77 @@ export interface ResponseTools<T extends RouteSpec> {
  * ```
  */
 export const jsx = async (element: unknown): Promise<Response> => {
-	let html: string;
+  let html: string;
 
-	if (typeof element === "string") {
-		html = element;
-	} else if (element instanceof Promise) {
-		html = await element;
-	} else {
-		// Assume it's a JSX element and render it using String()
-		html = String(element);
-	}
+  if (typeof element === "string") {
+    html = element;
+  } else if (element instanceof Promise) {
+    html = await element;
+  } else {
+    // Assume it's a JSX element and render it using String()
+    html = String(element);
+  }
 
-	return new Response(html, {
-		headers: { "Content-Type": "text/html" },
-	});
+  return new Response(html, {
+    headers: { "Content-Type": "text/html" },
+  });
 };
 
 // Helper functions to reduce code duplication
 const createJsonResponse = (
-	data: unknown,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+  data: unknown,
+  status: number,
+  init?: Omit<ResponseInit, "status">
 ) =>
-	new Response(JSON.stringify(data), {
-		status,
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
 
 const createTextResponse = (
-	data: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+  data: string,
+  status: number,
+  init?: Omit<ResponseInit, "status">
 ) =>
-	new Response(data, {
-		status,
-		headers: { "Content-Type": "text/plain" },
-		...init,
-	});
+  new Response(data, {
+    status,
+    headers: { "Content-Type": "text/plain" },
+    ...init,
+  });
 
 const createHtmlResponse = (
-	data: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+  data: string,
+  status: number,
+  init?: Omit<ResponseInit, "status">
 ) =>
-	new Response(data, {
-		status,
-		headers: { "Content-Type": "text/html" },
-		...init,
-	});
+  new Response(data, {
+    status,
+    headers: { "Content-Type": "text/html" },
+    ...init,
+  });
 
 const createErrorResponse = (
-	message: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+  message: string,
+  status: number,
+  init?: Omit<ResponseInit, "status">
 ) =>
-	new Response(JSON.stringify({ error: message }), {
-		status,
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
+  new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
 
 const createJsxResponse = async (
-	data: string | Promise<string>,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
+  data: string | Promise<string>,
+  status: number,
+  init?: Omit<ResponseInit, "status">
 ) =>
-	new Response(typeof data === "string" ? data : await data, {
-		status,
-		headers: { "Content-Type": "text/html" },
-		...init,
-	});
+  new Response(typeof data === "string" ? data : await data, {
+    status,
+    headers: { "Content-Type": "text/html" },
+    ...init,
+  });
 
 /**
  * Builds the set of typed response helpers used within request handlers.
@@ -421,142 +425,142 @@ const createJsxResponse = async (
  * @returns Helpers that serialise JSON, text, HTML, JSX, redirects and files
  */
 export const createResponseTools = <
-	T extends RouteSpec,
+  T extends RouteSpec
 >(): ResponseTools<T> => ({
-	// Typed JSON response with status validation
-	json: <S extends ValidStatusCodes<T>>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, init?.status ?? 200, init),
+  // Typed JSON response with status validation
+  json: <S extends ValidStatusCodes<T>>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createJsonResponse(data, init?.status ?? 200, init),
 
-	// Text response with status validation
-	text: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createTextResponse(data, init?.status ?? 200, init),
+  // Text response with status validation
+  text: <S extends ValidStatusCodes<T>>(
+    data: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createTextResponse(data, init?.status ?? 200, init),
 
-	// HTML response with status validation
-	html: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createHtmlResponse(data, init?.status ?? 200, init),
+  // HTML response with status validation
+  html: <S extends ValidStatusCodes<T>>(
+    data: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createHtmlResponse(data, init?.status ?? 200, init),
 
-	// JSX response with status validation
-	jsx: <S extends ValidStatusCodes<T>>(
-		data: string | Promise<string>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsxResponse(data, init?.status ?? 200, init),
+  // JSX response with status validation
+  jsx: <S extends ValidStatusCodes<T>>(
+    data: string | Promise<string>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createJsxResponse(data, init?.status ?? 200, init),
 
-	// Redirect response (always 3xx)
-	redirect: (url: string, status: 301 | 302 | 303 | 307 | 308 = 302) =>
-		new Response(null, {
-			status,
-			headers: { Location: url },
-		}),
+  // Redirect response (always 3xx)
+  redirect: (url: string, status: 301 | 302 | 303 | 307 | 308 = 302) =>
+    new Response(null, {
+      status,
+      headers: { Location: url },
+    }),
 
-	// File response with status validation
-	file: <S extends ValidStatusCodes<T>>(
-		data: Blob | ArrayBuffer | Uint8Array,
-		filename?: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => {
-		const headers = new Headers(init?.headers);
-		if (filename) {
-			headers.set("Content-Disposition", `attachment; filename="${filename}"`);
-		}
-		return new Response(data as BodyInit, {
-			status: init?.status ?? 200,
-			...init,
-			headers,
-		});
-	},
+  // File response with status validation
+  file: <S extends ValidStatusCodes<T>>(
+    data: Blob | ArrayBuffer | Uint8Array,
+    filename?: string,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => {
+    const headers = new Headers(init?.headers);
+    if (filename) {
+      headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+    }
+    return new Response(data as BodyInit, {
+      status: init?.status ?? 200,
+      ...init,
+      headers,
+    });
+  },
 
-	// Stream response with status validation
-	stream: <S extends ValidStatusCodes<T>>(
-		stream: ReadableStream,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) =>
-		new Response(stream, {
-			status: init?.status ?? 200,
-			...init,
-		}),
+  // Stream response with status validation
+  stream: <S extends ValidStatusCodes<T>>(
+    stream: ReadableStream,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) =>
+    new Response(stream, {
+      status: init?.status ?? 200,
+      ...init,
+    }),
 
-	// Error response with status validation
-	error: <S extends ValidStatusCodes<T>>(
-		message: string,
-		status: S,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message, status, init),
+  // Error response with status validation
+  error: <S extends ValidStatusCodes<T>>(
+    message: string,
+    status: S,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message, status, init),
 
-	// OK response (200) - only if 200 is defined in responses
-	ok: <S extends 200>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, 200, init),
+  // OK response (200) - only if 200 is defined in responses
+  ok: <S extends 200>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createJsonResponse(data, 200, init),
 
-	// Created response (201) - only if 201 is defined in responses
-	created: <S extends 201>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status">,
-	) => createJsonResponse(data, 201, init),
+  // Created response (201) - only if 201 is defined in responses
+  created: <S extends 201>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status">
+  ) => createJsonResponse(data, 201, init),
 
-	// Accepted response (202) - only if 202 is defined in responses
-	accepted: <S extends 202>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, 202, init),
+  // Accepted response (202) - only if 202 is defined in responses
+  accepted: <S extends 202>(
+    data: ResponseForStatus<T, S>,
+    init?: Omit<ResponseInit, "status"> & { status?: S }
+  ) => createJsonResponse(data, 202, init),
 
-	// No content response (204) - only if 204 is defined in responses
-	noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) =>
-		new Response(null, { status: 204, ...init }),
+  // No content response (204) - only if 204 is defined in responses
+  noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) =>
+    new Response(null, { status: 204, ...init }),
 
-	// Bad request response (400) - only if 400 is defined in responses
-	badRequest: <_S extends 400>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Bad Request", 400, init),
+  // Bad request response (400) - only if 400 is defined in responses
+  badRequest: <_S extends 400>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Bad Request", 400, init),
 
-	// Unauthorized response (401) - only if 401 is defined in responses
-	unauthorized: <_S extends 401>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Unauthorized", 401, init),
+  // Unauthorized response (401) - only if 401 is defined in responses
+  unauthorized: <_S extends 401>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Unauthorized", 401, init),
 
-	// Forbidden response (403) - only if 403 is defined in responses
-	forbidden: <_S extends 403>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Forbidden", 403, init),
+  // Forbidden response (403) - only if 403 is defined in responses
+  forbidden: <_S extends 403>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Forbidden", 403, init),
 
-	// Not found response (404) - only if 404 is defined in responses
-	notFound: <_S extends 404>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Not Found", 404, init),
+  // Not found response (404) - only if 404 is defined in responses
+  notFound: <_S extends 404>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Not Found", 404, init),
 
-	// Conflict response (409) - only if 409 is defined in responses
-	conflict: <_S extends 409>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Conflict", 409, init),
+  // Conflict response (409) - only if 409 is defined in responses
+  conflict: <_S extends 409>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Conflict", 409, init),
 
-	// Unprocessable entity response (422) - only if 422 is defined in responses
-	unprocessableEntity: <_S extends 422>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Unprocessable Entity", 422, init),
+  // Unprocessable entity response (422) - only if 422 is defined in responses
+  unprocessableEntity: <_S extends 422>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Unprocessable Entity", 422, init),
 
-	// Too many requests response (429) - only if 429 is defined in responses
-	tooManyRequests: <_S extends 429>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Too Many Requests", 429, init),
+  // Too many requests response (429) - only if 429 is defined in responses
+  tooManyRequests: <_S extends 429>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Too Many Requests", 429, init),
 
-	// Internal server error response (500) - only if 500 is defined in responses
-	internalError: <_S extends 500>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Internal Server Error", 500, init),
+  // Internal server error response (500) - only if 500 is defined in responses
+  internalError: <_S extends 500>(
+    message?: string,
+    init?: Omit<ResponseInit, "status">
+  ) => createErrorResponse(message ?? "Internal Server Error", 500, init),
 });
 
 /**
@@ -566,21 +570,21 @@ export const createResponseTools = <
  * @returns A streaming Response with the rendered HTML
  */
 export const jsxStream = (
-	html: (rid: number | string) => string | Promise<string>,
+  html: (rid: number | string) => string | Promise<string>
 ): Response => {
-	if (!currentContext) {
-		throw new Error("jsxStream must be called within a request context");
-	}
+  if (!currentContext) {
+    throw new Error("jsxStream must be called within a request context");
+  }
 
-	currentContext.header("Content-Type", "text/html; charset=utf-8");
-	const htmlStream = renderToStream(html);
+  currentContext.header("Content-Type", "text/html; charset=utf-8");
+  const htmlStream = renderToStream(html);
 
-	return stream(currentContext, async (stream) => {
-		for await (const chunk of htmlStream) {
-			stream.write(chunk);
-		}
-		stream.close();
-	});
+  return stream(currentContext, async (stream) => {
+    for await (const chunk of htmlStream) {
+      stream.write(chunk);
+    }
+    stream.close();
+  });
 };
 
 // export const jsxStream = (
@@ -598,17 +602,17 @@ export const jsxStream = (
  * @returns A streaming Response handled by Hono
  */
 export const jsxStreamHono = (
-	c: Context,
-	html: (rid: number | string) => string | Promise<string>,
+  c: Context,
+  html: (rid: number | string) => string | Promise<string>
 ): Response => {
-	c.header("Content-Type", "text/html; charset=utf-8");
-	const htmlStream = renderToStream(html);
-	return stream(c, async (stream) => {
-		for await (const chunk of htmlStream) {
-			stream.write(chunk);
-		}
-		stream.close();
-	});
+  c.header("Content-Type", "text/html; charset=utf-8");
+  const htmlStream = renderToStream(html);
+  return stream(c, async (stream) => {
+    for await (const chunk of htmlStream) {
+      stream.write(chunk);
+    }
+    stream.close();
+  });
 };
 
 /**
@@ -624,8 +628,8 @@ export const jsxStreamHono = (
  * @returns The inferred input type
  */
 export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
-	? StandardSchemaV1.InferInput<S>
-	: unknown;
+  ? StandardSchemaV1.InferInput<S>
+  : unknown;
 
 /**
  * Infers the output type from a StandardSchemaV1 schema.
@@ -634,17 +638,17 @@ export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
  * @returns The inferred output type
  */
 export type InferOutput<S> = S extends StandardSchemaV1<unknown, unknown>
-	? StandardSchemaV1.InferOutput<S>
-	: unknown;
+  ? StandardSchemaV1.InferOutput<S>
+  : unknown;
 
 function isStandard(s: unknown): s is AnySchema {
-	return (
-		typeof s === "object" &&
-		s !== null &&
-		typeof (s as { [k: string]: unknown })["~standard"] === "object" &&
-		((s as { [k: string]: unknown })["~standard"] as { version?: unknown })
-			?.version === 1
-	);
+  return (
+    typeof s === "object" &&
+    s !== null &&
+    typeof (s as { [k: string]: unknown })["~standard"] === "object" &&
+    ((s as { [k: string]: unknown })["~standard"] as { version?: unknown })
+      ?.version === 1
+  );
 }
 
 // DX: shape de issue estável
@@ -652,83 +656,83 @@ function isStandard(s: unknown): s is AnySchema {
  * Normalised validation issue shape used in error responses.
  */
 export type Issue = {
-	message: string;
-	path: (string | number)[];
-	expected?: string;
-	received?: unknown;
-	type?: string;
-	kind?: string;
+  message: string;
+  path: (string | number)[];
+  expected?: string;
+  received?: unknown;
+  type?: string;
+  kind?: string;
 };
 
 function formatIssues(raw: ReadonlyArray<unknown> = []): Issue[] {
-	type LooseIssue = {
-		message?: unknown;
-		path?: unknown;
-		expected?: unknown;
-		received?: unknown;
-		type?: unknown;
-		kind?: unknown;
-	};
-	return raw.map((i) => {
-		const ii = i as LooseIssue;
-		const path = Array.isArray(ii.path)
-			? (ii.path as unknown[]).map((p) => {
-					const pk = (p as { key?: unknown }).key;
-					return typeof pk !== "undefined"
-						? (pk as string | number)
-						: (p as string | number);
-				})
-			: [];
-		return {
-			message: String(ii.message ?? ""),
-			path,
-			expected: typeof ii.expected === "string" ? ii.expected : undefined,
-			received: ii.received,
-			type: typeof ii.type === "string" ? ii.type : undefined,
-			kind: typeof ii.kind === "string" ? ii.kind : undefined,
-		};
-	});
+  type LooseIssue = {
+    message?: unknown;
+    path?: unknown;
+    expected?: unknown;
+    received?: unknown;
+    type?: unknown;
+    kind?: unknown;
+  };
+  return raw.map((i) => {
+    const ii = i as LooseIssue;
+    const path = Array.isArray(ii.path)
+      ? (ii.path as unknown[]).map((p) => {
+          const pk = (p as { key?: unknown }).key;
+          return typeof pk !== "undefined"
+            ? (pk as string | number)
+            : (p as string | number);
+        })
+      : [];
+    return {
+      message: String(ii.message ?? ""),
+      path,
+      expected: typeof ii.expected === "string" ? ii.expected : undefined,
+      received: ii.received,
+      type: typeof ii.type === "string" ? ii.type : undefined,
+      kind: typeof ii.kind === "string" ? ii.kind : undefined,
+    };
+  });
 }
 
 // Validação por parte (params/query/headers/body) com localização
 async function validatePart<S extends AnySchema>(
-	where: "params" | "query" | "headers" | "body",
-	schema: S | undefined,
-	value: unknown,
+  where: "params" | "query" | "headers" | "body",
+  schema: S | undefined,
+  value: unknown
 ): Promise<{
-	value: unknown;
-	issues: null | { location: typeof where; issues: Issue[] };
+  value: unknown;
+  issues: null | { location: typeof where; issues: Issue[] };
 }> {
-	if (!schema) return { value, issues: null };
-	if (!isStandard(schema)) {
-		return {
-			value: null,
-			issues: {
-				location: where,
-				issues: [
-					{ message: "Schema must implement StandardSchemaV1", path: [] },
-				],
-			},
-		};
-	}
+  if (!schema) return { value, issues: null };
+  if (!isStandard(schema)) {
+    return {
+      value: null,
+      issues: {
+        location: where,
+        issues: [
+          { message: "Schema must implement StandardSchemaV1", path: [] },
+        ],
+      },
+    };
+  }
 
-	const std = (schema as { [k: string]: unknown })["~standard"] as {
-		validate: (v: unknown) => unknown | Promise<unknown>;
-	};
-	let r = std.validate(value);
-	if (r instanceof Promise) r = await r;
+  const std = (schema as { [k: string]: unknown })["~standard"] as {
+    validate: (v: unknown) => unknown | Promise<unknown>;
+  };
+  let r = std.validate(value);
+  if (r instanceof Promise) r = await r;
 
-	const fail = r as StandardSchemaV1.FailureResult;
-	if ("issues" in (fail as object)) {
-		return {
-			value: null,
-			issues: { location: where, issues: formatIssues(fail.issues) },
-		};
-	}
-	return {
-		value: (r as StandardSchemaV1.SuccessResult<unknown>).value,
-		issues: null,
-	};
+  const fail = r as StandardSchemaV1.FailureResult;
+  if ("issues" in (fail as object)) {
+    return {
+      value: null,
+      issues: { location: where, issues: formatIssues(fail.issues) },
+    };
+  }
+  return {
+    value: (r as StandardSchemaV1.SuccessResult<unknown>).value,
+    issues: null,
+  };
 }
 
 /**
@@ -740,21 +744,21 @@ async function validatePart<S extends AnySchema>(
  * @returns The schema decorated with StandardSchemaV1 metadata
  */
 export function toStandardSchema<S extends AnySchema>(
-	schema: S,
-	vendor = "hono-file-router",
+  schema: S,
+  vendor = "hono-file-router"
 ): StandardSchemaV1<InferInput<S>, InferOutput<S>> {
-	if (!isStandard(schema))
-		throw new Error("Schema must implement StandardSchemaV1");
-	const std = (schema as { [k: string]: unknown })["~standard"] as {
-		vendor?: string;
-		[k: string]: unknown;
-	};
-	return {
-		"~standard": {
-			...std,
-			vendor: std.vendor ?? vendor,
-		},
-	} as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
+  if (!isStandard(schema))
+    throw new Error("Schema must implement StandardSchemaV1");
+  const std = (schema as { [k: string]: unknown })["~standard"] as {
+    vendor?: string;
+    [k: string]: unknown;
+  };
+  return {
+    "~standard": {
+      ...std,
+      vendor: std.vendor ?? vendor,
+    },
+  } as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
 }
 
 /**
@@ -768,10 +772,10 @@ export function toStandardSchema<S extends AnySchema>(
  * Each property represents a different part of the HTTP request.
  */
 export type SchemaDefinition = {
-	query?: StandardSchemaV1<unknown, unknown>;
-	params?: StandardSchemaV1<unknown, unknown>;
-	headers?: StandardSchemaV1<unknown, unknown>;
-	body?: StandardSchemaV1<unknown, unknown>;
+  query?: StandardSchemaV1<unknown, unknown>;
+  params?: StandardSchemaV1<unknown, unknown>;
+  headers?: StandardSchemaV1<unknown, unknown>;
+  body?: StandardSchemaV1<unknown, unknown>;
 };
 
 // Tipos de OpenAPI (reusados no registry)
@@ -779,13 +783,13 @@ export type SchemaDefinition = {
  * Extends SchemaDefinition with OpenAPI metadata for documentation generation.
  */
 export type WithOpenAPI = {
-	openapi?: {
-		method?: HttpMethod; // Now optional - will be inferred from export name
-		summary?: string;
-		tags?: string[];
-		request?: RequestSchemas;
-		responses?: ResponsesMap;
-	};
+  openapi?: {
+    method?: HttpMethod; // Now optional - will be inferred from export name
+    summary?: string;
+    tags?: string[];
+    request?: RequestSchemas;
+    responses?: ResponsesMap;
+  };
 } & SchemaDefinition;
 
 /**
@@ -794,153 +798,153 @@ export type WithOpenAPI = {
 export type RouteSpec = SchemaDefinition | WithOpenAPI;
 
 type EffectiveSchemas<T extends RouteSpec> = {
-	query: T extends { openapi: { request: { query: infer Q } } }
-		? Q
-		: T extends { query: infer Q }
-			? Q
-			: never;
-	params: T extends { openapi: { request: { params: infer P } } }
-		? P
-		: T extends { params: infer P }
-			? P
-			: never;
-	headers: T extends { openapi: { request: { headers: infer H } } }
-		? H
-		: T extends { headers: infer H }
-			? H
-			: never;
-	body: T extends { openapi: { request: { body: infer B } } }
-		? B
-		: T extends { body: infer B }
-			? B
-			: never;
+  query: T extends { openapi: { request: { query: infer Q } } }
+    ? Q
+    : T extends { query: infer Q }
+    ? Q
+    : never;
+  params: T extends { openapi: { request: { params: infer P } } }
+    ? P
+    : T extends { params: infer P }
+    ? P
+    : never;
+  headers: T extends { openapi: { request: { headers: infer H } } }
+    ? H
+    : T extends { headers: infer H }
+    ? H
+    : never;
+  body: T extends { openapi: { request: { body: infer B } } }
+    ? B
+    : T extends { body: infer B }
+    ? B
+    : never;
 };
 
 /**
  * Strongly-typed context passed to route handlers after validation.
  */
 export type HandlerContext<T extends RouteSpec> = {
-	params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["params"]>
-		: Record<string, unknown>;
-	query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["query"]>
-		: Record<string, unknown>;
-	headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["headers"]>
-		: Record<string, string>;
-	body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["body"]>
-		: unknown;
-	response: ResponseTools<T>;
+  params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<
+    unknown,
+    unknown
+  >
+    ? InferOutput<EffectiveSchemas<T>["params"]>
+    : Record<string, unknown>;
+  query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
+    ? InferOutput<EffectiveSchemas<T>["query"]>
+    : Record<string, unknown>;
+  headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<
+    unknown,
+    unknown
+  >
+    ? InferOutput<EffectiveSchemas<T>["headers"]>
+    : Record<string, string>;
+  body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
+    ? InferOutput<EffectiveSchemas<T>["body"]>
+    : unknown;
+  response: ResponseTools<T>;
 };
 
 /**
  * Extracts the concrete type from a response marker.
  */
 export type InferResponseType<T> = T extends { __phantom__: infer U }
-	? U
-	: never;
+  ? U
+  : never;
 /**
  * Maps the response markers declared in the route spec to plain types.
  */
 export type InferResponses<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
+  openapi: { responses: infer R };
 }
-	? {
-			[K in keyof R]: R[K] extends { __phantom__: infer U } ? U : never;
-		}
-	: never;
+  ? {
+      [K in keyof R]: R[K] extends { __phantom__: infer U } ? U : never;
+    }
+  : never;
 /**
  * Union of all declared response payloads for the route.
  */
 export type ValidResponse<T extends RouteSpec> =
-	| InferResponses<T>[keyof InferResponses<T>]
-	| Response;
+  | InferResponses<T>[keyof InferResponses<T>]
+  | Response;
 /**
  * Extracts the response payload type for a specific status code.
  */
 export type ResponseForStatus<
-	T extends RouteSpec,
-	S extends number,
+  T extends RouteSpec,
+  S extends number
 > = T extends { openapi: { responses: infer R } }
-	? S extends keyof R
-		? R[S] extends { __phantom__: infer U }
-			? U
-			: never
-		: never
-	: never;
+  ? S extends keyof R
+    ? R[S] extends { __phantom__: infer U }
+      ? U
+      : never
+    : never
+  : never;
 /**
  * Extracts the declared status codes for the route.
  */
 export type ValidStatusCodes<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
+  openapi: { responses: infer R };
 }
-	? keyof R extends number
-		? keyof R
-		: never
-	: never;
+  ? keyof R extends number
+    ? keyof R
+    : never
+  : never;
 /**
  * Extracts the response type for a given status or falls back to default.
  */
 export type InferResponse<
-	T extends RouteSpec,
-	S extends number = 200,
+  T extends RouteSpec,
+  S extends number = 200
 > = T extends { openapi: { responses: infer R } }
-	? R extends ResponsesMap
-		? S extends keyof R
-			? R[S] extends ResponseMarker<infer U>
-				? U
-				: unknown
-			: R extends { default: ResponseMarker<infer DU> }
-				? DU
-				: unknown
-		: unknown
-	: unknown;
+  ? R extends ResponsesMap
+    ? S extends keyof R
+      ? R[S] extends ResponseMarker<infer U>
+        ? U
+        : unknown
+      : R extends { default: ResponseMarker<infer DU> }
+      ? DU
+      : unknown
+    : unknown
+  : unknown;
 
 function pickContentType(req: {
-	header: (name: string) => string | undefined;
+  header: (name: string) => string | undefined;
 }): string {
-	return (req.header("content-type") || "").toLowerCase();
+  return (req.header("content-type") || "").toLowerCase();
 }
 
 function coerceQuery(obj: Record<string, unknown>) {
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(obj)) {
-		if (v === "") {
-			out[k] = undefined;
-			continue;
-		}
-		// Desabilitado: coerção automática de string para number
-		// if (typeof v === "string" && /^-?\d+$/.test(v)) { out[k] = Number(v); continue; }
-		if (v === "true" || v === "false") {
-			out[k] = v === "true";
-			continue;
-		}
-		out[k] = v;
-	}
-	return out;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === "") {
+      out[k] = undefined;
+      continue;
+    }
+    // Desabilitado: coerção automática de string para number
+    // if (typeof v === "string" && /^-?\d+$/.test(v)) { out[k] = Number(v); continue; }
+    if (v === "true" || v === "false") {
+      out[k] = v === "true";
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
 }
 
 function extractSchemas(spec?: RouteSpec) {
-	const req =
-		(spec as WithOpenAPI)?.openapi?.request ??
-		(spec as SchemaDefinition) ??
-		undefined;
-	const res = (spec as WithOpenAPI)?.openapi?.responses;
-	const meta = (spec as WithOpenAPI)?.openapi
-		? {
-				summary: (spec as WithOpenAPI).openapi?.summary,
-				tags: (spec as WithOpenAPI).openapi?.tags,
-			}
-		: {};
-	return { req, res, meta } as const;
+  const req =
+    (spec as WithOpenAPI)?.openapi?.request ??
+    (spec as SchemaDefinition) ??
+    undefined;
+  const res = (spec as WithOpenAPI)?.openapi?.responses;
+  const meta = (spec as WithOpenAPI)?.openapi
+    ? {
+        summary: (spec as WithOpenAPI).openapi?.summary,
+        tags: (spec as WithOpenAPI).openapi?.tags,
+      }
+    : {};
+  return { req, res, meta } as const;
 }
 
 /**
@@ -952,128 +956,128 @@ function extractSchemas(spec?: RouteSpec) {
  * @returns A function that can be mounted onto a Hono router
  */
 export function createHandler<T extends RouteSpec>(
-	spec: T | undefined,
-	handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>,
+  spec: T | undefined,
+  handler: (
+    context: HandlerContext<NonNullable<T>>
+  ) => unknown | Promise<unknown>
 ): (c: Context) => Promise<Response> {
-	let registered = false;
-	return async (c: Context) => {
-		try {
-			setRequestContext(c);
+  let registered = false;
+  return async (c: Context) => {
+    try {
+      setRequestContext(c);
 
-			// Registro lazy: método+path da rota do Hono
-			if (!registered && spec && (spec as WithOpenAPI).openapi) {
-				// Hono expõe o padrão de rota em c.req.routePath em v4+; fallback para c.req.path
-				const method = c.req.method.toLowerCase() as HttpMethod;
-				const path = routePath(c) ?? c.req.path; // pode ser "/users/:id"
-				const { req, res, meta } = extractSchemas(spec);
-				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
-				// this.log.info(`Request schemas:`, req);
-				// this.log.info(`Response schemas:`, res);
-				// this.log.info(`Meta:`, meta);
-				lazyRegister(method, path, { request: req, responses: res, ...meta });
-				registered = true;
-			}
+      // Registro lazy: método+path da rota do Hono
+      if (!registered && spec && (spec as WithOpenAPI).openapi) {
+        // Hono expõe o padrão de rota em c.req.routePath em v4+; fallback para c.req.path
+        const method = c.req.method.toLowerCase() as HttpMethod;
+        const path = routePath(c) ?? c.req.path; // pode ser "/users/:id"
+        const { req, res, meta } = extractSchemas(spec);
+        // this.log.info(`Registering OpenAPI route: ${method} ${path}`);
+        // this.log.info(`Request schemas:`, req);
+        // this.log.info(`Response schemas:`, res);
+        // this.log.info(`Meta:`, meta);
+        lazyRegister(method, path, { request: req, responses: res, ...meta });
+        registered = true;
+      }
 
-			const rawParams = c.req.param();
-			const rawQuery = coerceQuery(
-				Object.fromEntries(Object.entries(c.req.query())),
-			);
-			const rawHeaders = Object.fromEntries(Object.entries(c.req.header()));
+      const rawParams = c.req.param();
+      const rawQuery = coerceQuery(
+        Object.fromEntries(Object.entries(c.req.query()))
+      );
+      const rawHeaders = Object.fromEntries(Object.entries(c.req.header()));
 
-			let rawBody: unknown = {};
-			try {
-				const ct = pickContentType(c.req);
-				if (ct.includes("application/json")) rawBody = await c.req.json();
-				else if (ct.includes("text/plain")) rawBody = await c.req.text();
-				else if (ct.includes("application/x-www-form-urlencoded"))
-					rawBody = await c.req.parseBody();
-			} catch {
-				rawBody = {};
-			}
+      let rawBody: unknown = {};
+      try {
+        const ct = pickContentType(c.req);
+        if (ct.includes("application/json")) rawBody = await c.req.json();
+        else if (ct.includes("text/plain")) rawBody = await c.req.text();
+        else if (ct.includes("application/x-www-form-urlencoded"))
+          rawBody = await c.req.parseBody();
+      } catch {
+        rawBody = {};
+      }
 
-			const { req: reqSchemas } = extractSchemas(spec);
+      const { req: reqSchemas } = extractSchemas(spec);
 
-			const P = await validatePart(
-				"params",
-				reqSchemas?.params as AnySchema,
-				rawParams,
-			);
-			const Q = await validatePart(
-				"query",
-				reqSchemas?.query as AnySchema,
-				rawQuery,
-			);
-			const H = await validatePart(
-				"headers",
-				reqSchemas?.headers as AnySchema,
-				rawHeaders,
-			);
-			const B = await validatePart(
-				"body",
-				reqSchemas?.body as AnySchema,
-				rawBody,
-			);
+      const P = await validatePart(
+        "params",
+        reqSchemas?.params as AnySchema,
+        rawParams
+      );
+      const Q = await validatePart(
+        "query",
+        reqSchemas?.query as AnySchema,
+        rawQuery
+      );
+      const H = await validatePart(
+        "headers",
+        reqSchemas?.headers as AnySchema,
+        rawHeaders
+      );
+      const B = await validatePart(
+        "body",
+        reqSchemas?.body as AnySchema,
+        rawBody
+      );
 
-			const details = [P.issues, Q.issues, H.issues, B.issues].filter(
-				Boolean,
-			) as Array<{ location: string; issues: Issue[] }>;
-			if (details.length) {
-				return createJsonResponse(
-					{
-						error: {
-							code: "VALIDATION_ERROR",
-							message: "Invalid request payload",
-							details,
-						},
-					},
-					400,
-				);
-			}
+      const details = [P.issues, Q.issues, H.issues, B.issues].filter(
+        Boolean
+      ) as Array<{ location: string; issues: Issue[] }>;
+      if (details.length) {
+        return createJsonResponse(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Invalid request payload",
+              details,
+            },
+          },
+          400
+        );
+      }
 
-			const result = await handler({
-				params: P.value,
-				query: Q.value,
-				headers: H.value,
-				body: B.value,
-			} as HandlerContext<NonNullable<T>>);
+      const result = await handler({
+        params: P.value,
+        query: Q.value,
+        headers: H.value,
+        body: B.value,
+      } as HandlerContext<NonNullable<T>>);
 
-			if (result instanceof Response) return result;
+      if (result instanceof Response) return result;
 
-			let status = 200;
-			let body: unknown = result;
-			if (
-				body &&
-				typeof body === "object" &&
-				"status" in body &&
-				"body" in body
-			) {
-				status = Number(body.status) || 200;
-				body = body.body;
-			}
-			return createJsonResponse(body, status);
-		} catch (err) {
-			if (err instanceof AppError) {
-				return createJsonResponse(
-					{
-						error: {
-							code: "APP_ERROR",
-							message: err.message,
-							...(err.meta ? { meta: err.meta } : {}),
-						},
-					},
-					err.code,
-				);
-			}
-			return c.json(
-				{ error: { code: "INTERNAL", message: "Internal Server Error" } },
-				500,
-			);
-		} finally {
-			currentContext = null;
-		}
-	};
+      let status = 200;
+      let body: unknown = result;
+      if (
+        body &&
+        typeof body === "object" &&
+        "status" in body &&
+        "body" in body
+      ) {
+        status = Number(body.status) || 200;
+        body = body.body;
+      }
+      return createJsonResponse(body, status);
+    } catch (err) {
+      if (err instanceof AppError) {
+        return createJsonResponse(
+          {
+            error: {
+              code: "APP_ERROR",
+              message: err.message,
+              ...(err.meta ? { meta: err.meta } : {}),
+            },
+          },
+          err.code
+        );
+      }
+      return c.json(
+        { error: { code: "INTERNAL", message: "Internal Server Error" } },
+        500
+      );
+    } finally {
+      currentContext = null;
+    }
+  };
 }
 
 /**
@@ -1084,84 +1088,84 @@ export function createHandler<T extends RouteSpec>(
  * @returns Original schema together with a `getStandardSchema` accessor
  */
 export function createSchema<T extends SchemaDefinition>(
-	schema: T,
+  schema: T
 ): T & {
-	getStandardSchema(): {
-		query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
-		params?: StandardSchemaV1<
-			InferInput<T["params"]>,
-			InferOutput<T["params"]>
-		>;
-		headers?: StandardSchemaV1<
-			InferInput<T["headers"]>,
-			InferOutput<T["headers"]>
-		>;
-		body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-	};
+  getStandardSchema(): {
+    query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
+    params?: StandardSchemaV1<
+      InferInput<T["params"]>,
+      InferOutput<T["params"]>
+    >;
+    headers?: StandardSchemaV1<
+      InferInput<T["headers"]>,
+      InferOutput<T["headers"]>
+    >;
+    body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
+  };
 } {
-	return {
-		...schema,
-		getStandardSchema(): {
-			query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
-			params?: StandardSchemaV1<
-				InferInput<T["params"]>,
-				InferOutput<T["params"]>
-			>;
-			headers?: StandardSchemaV1<
-				InferInput<T["headers"]>,
-				InferOutput<T["headers"]>
-			>;
-			body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-		} {
-			return {
-				query: schema.query
-					? toStandardSchema(
-							schema.query as AnySchema,
-							"hono-file-router:query",
-						)
-					: undefined,
-				params: schema.params
-					? toStandardSchema(
-							schema.params as AnySchema,
-							"hono-file-router:params",
-						)
-					: undefined,
-				headers: schema.headers
-					? toStandardSchema(
-							schema.headers as AnySchema,
-							"hono-file-router:headers",
-						)
-					: undefined,
-				body: schema.body
-					? toStandardSchema(schema.body as AnySchema, "hono-file-router:body")
-					: undefined,
-			} as {
-				query?: StandardSchemaV1<
-					InferInput<T["query"]>,
-					InferOutput<T["query"]>
-				>;
-				params?: StandardSchemaV1<
-					InferInput<T["params"]>,
-					InferOutput<T["params"]>
-				>;
-				headers?: StandardSchemaV1<
-					InferInput<T["headers"]>,
-					InferOutput<T["headers"]>
-				>;
-				body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-			};
-		},
-	};
+  return {
+    ...schema,
+    getStandardSchema(): {
+      query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
+      params?: StandardSchemaV1<
+        InferInput<T["params"]>,
+        InferOutput<T["params"]>
+      >;
+      headers?: StandardSchemaV1<
+        InferInput<T["headers"]>,
+        InferOutput<T["headers"]>
+      >;
+      body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
+    } {
+      return {
+        query: schema.query
+          ? toStandardSchema(
+              schema.query as AnySchema,
+              "hono-file-router:query"
+            )
+          : undefined,
+        params: schema.params
+          ? toStandardSchema(
+              schema.params as AnySchema,
+              "hono-file-router:params"
+            )
+          : undefined,
+        headers: schema.headers
+          ? toStandardSchema(
+              schema.headers as AnySchema,
+              "hono-file-router:headers"
+            )
+          : undefined,
+        body: schema.body
+          ? toStandardSchema(schema.body as AnySchema, "hono-file-router:body")
+          : undefined,
+      } as {
+        query?: StandardSchemaV1<
+          InferInput<T["query"]>,
+          InferOutput<T["query"]>
+        >;
+        params?: StandardSchemaV1<
+          InferInput<T["params"]>,
+          InferOutput<T["params"]>
+        >;
+        headers?: StandardSchemaV1<
+          InferInput<T["headers"]>,
+          InferOutput<T["headers"]>
+        >;
+        body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
+      };
+    },
+  };
 }
 
 /**
  * Creates a GET route handler with type-safe request/response validation.
  */
 type RouteFactory = <T extends RouteSpec>(
-	spec: T | undefined,
-	handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>,
+  spec: T | undefined,
+  handler: (
+    context: HandlerContext<NonNullable<T>>
+  ) => unknown | Promise<unknown>
 ) => (c: Context) => Promise<Response>;
 
 export const get: RouteFactory = createHandler;
@@ -1206,287 +1210,482 @@ export const head: RouteFactory = createHandler;
  * @returns Hono handler augmented with route configuration metadata
  */
 export function handle<T extends RouteSpec = RouteSpec>(
-	specOrHandler:
-		| T
-		| ((context: HandlerContext<NonNullable<T>>) => unknown | Promise<unknown>),
-	handlerOrFilePath?: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown> | string,
-	filePath?: string,
+  specOrHandler:
+    | T
+    | ((context: HandlerContext<NonNullable<T>>) => unknown | Promise<unknown>),
+  handlerOrFilePath?: (
+    context: HandlerContext<NonNullable<T>>
+  ) => unknown | Promise<unknown> | string,
+  filePath?: string
 ): ReturnType<typeof createHandler> & { __routeConfig: T } {
-	// Check if first argument is a spec object or a handler function
-	const isSpecObject =
-		typeof specOrHandler === "object" &&
-		specOrHandler !== null &&
-		!("call" in specOrHandler);
+  // Check if first argument is a spec object or a handler function
+  const isSpecObject =
+    typeof specOrHandler === "object" &&
+    specOrHandler !== null &&
+    !("call" in specOrHandler);
 
-	let spec: T;
-	let handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>;
-	let effectiveFilePath: string | undefined;
+  let spec: T;
+  let handler: (
+    context: HandlerContext<NonNullable<T>>
+  ) => unknown | Promise<unknown>;
+  let effectiveFilePath: string | undefined;
 
-	if (isSpecObject) {
-		// handle(spec, handler, filePath?)
-		spec = specOrHandler as T;
-		handler = handlerOrFilePath as (
-			context: HandlerContext<NonNullable<T>>,
-		) => unknown | Promise<unknown>;
-		effectiveFilePath = filePath;
-	} else {
-		// handle(handler, filePath?)
-		spec = {} as T;
-		handler = specOrHandler as (
-			context: HandlerContext<NonNullable<T>>,
-		) => unknown | Promise<unknown>;
-		effectiveFilePath = handlerOrFilePath as string | undefined;
-	}
+  if (isSpecObject) {
+    // handle(spec, handler, filePath?)
+    spec = specOrHandler as T;
+    handler = handlerOrFilePath as (
+      context: HandlerContext<NonNullable<T>>
+    ) => unknown | Promise<unknown>;
+    effectiveFilePath = filePath;
+  } else {
+    // handle(handler, filePath?)
+    spec = {} as T;
+    handler = specOrHandler as (
+      context: HandlerContext<NonNullable<T>>
+    ) => unknown | Promise<unknown>;
+    effectiveFilePath = handlerOrFilePath as string | undefined;
+  }
 
-	const openapi = (spec as { openapi?: unknown }).openapi;
-	if (openapi) {
-		// Use provided filePath or fall back to current file path from context
-		const finalFilePath = effectiveFilePath || getCurrentFilePath();
-		if (finalFilePath) {
-			(openapi as { filePath?: string }).filePath = finalFilePath;
-		}
-		// Don't register here - let file-router handle it after method inference
-		// register(openapi);
-	}
+  const openapi = (spec as { openapi?: unknown }).openapi;
+  if (openapi) {
+    // Use provided filePath or fall back to current file path from context
+    const finalFilePath = effectiveFilePath || getCurrentFilePath();
+    if (finalFilePath) {
+      (openapi as { filePath?: string }).filePath = finalFilePath;
+    }
+    // Don't register here - let file-router handle it after method inference
+    // register(openapi);
+  }
 
-	// Create handler and attach metadata
-	const h = createHandler(spec, async (context) => {
-		const responseTools = createResponseTools<NonNullable<T>>();
-		// Create context with response tools included
-		const fullContext = {
-			...context,
-			response: responseTools,
-		} as HandlerContext<NonNullable<T>>;
+  // Create handler and attach metadata
+  const h = createHandler(spec, async (context) => {
+    const responseTools = createResponseTools<NonNullable<T>>();
+    // Create context with response tools included
+    const fullContext = {
+      ...context,
+      response: responseTools,
+    } as HandlerContext<NonNullable<T>>;
 
-		const result = await handler(fullContext);
+    const result = await handler(fullContext);
 
-		// If result is already a Response, return it directly
-		if (result instanceof Response) {
-			return result;
-		}
+    // If result is already a Response, return it directly
+    if (result instanceof Response) {
+      return result;
+    }
 
-		// // Check if current file is JSX/TSX - if so, always treat as HTML
-		const currentFile = getCurrentFilePath();
-		const isJSXFile =
-			currentFile &&
-			(currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
+    // // Check if current file is JSX/TSX - if so, always treat as HTML
+    const currentFile = getCurrentFilePath();
+    const isJSXFile =
+      currentFile &&
+      (currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
 
-		if (isJSXFile) {
-			return jsx(result);
-		}
+    if (isJSXFile) {
+      return jsx(result);
+    }
 
-		// Otherwise, wrap in json() for automatic serialization
-		return json(result);
-	});
+    // Otherwise, wrap in json() for automatic serialization
+    return json(result);
+  });
 
-	(h as unknown as { __routeConfig: T }).__routeConfig = spec ?? ({} as T);
-	return h as typeof h & { __routeConfig: T };
+  (h as unknown as { __routeConfig: T }).__routeConfig = spec ?? ({} as T);
+  return h as typeof h & { __routeConfig: T };
 }
 
 /**
  * Minimal server wiring + OpenAPI/Scalar
  */
 export default class Server {
-	private app = new Hono();
-	private port: number = parseInt(process.env.PORT ?? "3000", 10);
+  private app = new Hono();
+  private port: number = parseInt(process.env.PORT ?? "3000", 10);
 
-	private log = createLogger("core:server");
+  private log = createLogger("core:server");
 
-	constructor(port?: number) {
-		this.port = port ?? this.port;
-	}
+  constructor(port?: number) {
+    this.port = port ?? this.port;
+  }
 
-	private setupApp(): void {
-		this.app.use("*", async (c, next) => {
-			c.res.headers.set("x-powered-by", "hono-file-router");
-			await next();
-		});
+  private setupApp(): void {
+    // Helper: interpolate placeholders in doc using request URL and package.json
+    const interpolateDoc = async (doc: Record<string, unknown>, c: Context) => {
+      try {
+        const u = new URL(c.req.url);
+        const proto = u.protocol.replace(":", "");
+        const port = u.port || (u.protocol === "https:" ? "443" : "80");
+        const origin = `${u.protocol}//${u.host}`;
+        const pkg: Record<string, unknown> = {};
+        try {
+          const path = await import("node:path");
+          const fs = await import("node:fs");
+          const pkgPath = path.join(process.cwd(), "package.json");
+          if (fs.existsSync(pkgPath)) {
+            const parsed = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+            Object.assign(pkg, parsed);
+          }
+        } catch {
+          // noop
+        }
 
-		// MOUNT ROUTES by file system (fora daqui)
-		// mountFileRouter(this.app, { routesDir: "./src/routes", basePath: "" });
+        // Apply sensible defaults when user didn't provide them
+        const d = doc as any;
+        if (!d.info) d.info = {};
+        if (!d.info.title)
+          d.info.title = String((pkg as any).displayName ?? pkg.name ?? "API");
+        if (!d.info.version) d.info.version = String(pkg.version ?? "1.0.0");
+        if (!d.info.description)
+          d.info.description = String(pkg.description ?? "");
+        if (!Array.isArray(d.servers) || d.servers.length === 0) {
+          d.servers = [{ url: origin, description: "Default" }];
+        }
 
-		// ── OpenAPI JSON é servido do arquivo gerado estaticamente
-		this.app.get("/openapi.json", async (c) => {
-			try {
-				const fs = await import("node:fs");
-				const path = await import("node:path");
+        const lookup = (key: string): string => {
+          switch (key) {
+            case "origin":
+            case "server.origin":
+              return origin;
+            case "protocol":
+            case "server.protocol":
+              return proto;
+            case "host":
+            case "server.host":
+              return u.hostname;
+            case "port":
+            case "server.port":
+              return port;
+            case "pkg.name":
+              return String(pkg.name ?? "");
+            case "pkg.version":
+              return String(pkg.version ?? "");
+            case "pkg.displayName":
+              return String((pkg as any).displayName ?? "");
+            case "pkg.description":
+              return String(pkg.description ?? "");
+            default:
+              return "";
+          }
+        };
 
-				// Tenta carregar o arquivo openapi.json gerado estaticamente
-				const openapiPath = path.join(process.cwd(), "openapi.json");
+        const interp = (val: unknown): unknown => {
+          if (typeof val !== "string") return val;
+          let out = val as string;
+          // ${key} form
+          out = out.replace(/\$\{\s*([a-zA-Z0-9_.-]+)\s*\}/g, (_m, g1) =>
+            lookup(String(g1))
+          );
+          // {{key}} form
+          out = out.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_m, g1) =>
+            lookup(String(g1))
+          );
+          return out;
+        };
 
-				const genCtl = getOpenAPIGeneration();
-				if (genCtl.mode === "memory") {
-					try {
-						const p = await import("node:path");
-						const os = await import("node:os");
-						const fs2 = await import("node:fs");
-						const { generateOpenAPI } = await import("./openapi/generator/index.ts");
-						const tmpFile = p.join(os.tmpdir(), `openapi.${Date.now()}.json`);
-						await generateOpenAPI(genCtl.project || "./tsconfig.json", tmpFile);
-						const doc = JSON.parse(fs2.readFileSync(tmpFile, "utf-8"));
-						try { fs2.unlinkSync(tmpFile); } catch {}
-						// Merge root overrides
-						try {
-							const o = getRootOverrides();
-							if (o) {
-								if (o.info) (doc as any).info = { ...(doc as any).info, ...o.info };
-								if (o.servers?.length) (doc as any).servers = o.servers;
-								if (o.tags?.length) (doc as any).tags = o.tags as any;
-								if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
-								if (o.components?.securitySchemes) {
-									(doc as any).components = (doc as any).components || {};
-									(doc as any).components.securitySchemes = {
-										...((doc as any).components?.securitySchemes || {}),
-										...o.components.securitySchemes,
-									};
-								}
-								if (o.extensions) {
-									for (const [k, v] of Object.entries(o.extensions)) {
-										if (k.startsWith("x-")) (doc as Record<string, unknown>)[k] = v as any;
-									}
-								}
-							}
-						} catch {}
-						return c.json(doc, {
-							headers: {
-								"Access-Control-Allow-Origin": "*",
-								"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-								"Access-Control-Allow-Headers": "Content-Type, Authorization",
-								"Content-Type": "application/json",
-							},
-						});
-					} catch {}
-				}
+        // servers[].url
+        if (Array.isArray((doc as any).servers)) {
+          (doc as any).servers = (doc as any).servers.map(
+            (s: Record<string, unknown>) => ({
+              ...s,
+              url: interp(s.url),
+            })
+          );
+        }
+        // info.title / info.description
+        if ((doc as any).info) {
+          (doc as any).info.title = interp((doc as any).info.title);
+          (doc as any).info.version = interp((doc as any).info.version);
+          (doc as any).info.description = interp((doc as any).info.description);
+        }
+        // externalDocs.url
+        if ((doc as any).externalDocs) {
+          (doc as any).externalDocs.url = interp((doc as any).externalDocs.url);
+        }
+      } catch {}
+    };
+    this.app.use("*", async (c, next) => {
+      c.res.headers.set("x-powered-by", "hono-file-router");
+      await next();
+    });
 
-				if (fs.existsSync(openapiPath)) {
-					const openapiContent = fs.readFileSync(openapiPath, "utf-8");
-					const doc = JSON.parse(openapiContent);
-					// Merge root-level overrides from serve({ openapi })
-					try {
-						const o = getRootOverrides();
-						if (o) {
-							if (o.info)
-								(doc as any).info = { ...(doc as any).info, ...o.info };
-							if (o.servers?.length) (doc as any).servers = o.servers;
-							if (o.tags?.length) (doc as any).tags = o.tags as any;
-							if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
-							if (o.components?.securitySchemes) {
-								(doc as any).components = (doc as any).components || {};
-								(doc as any).components.securitySchemes = {
-									...((doc as any).components?.securitySchemes || {}),
-									...o.components.securitySchemes,
-								};
-							}
-							if (o.extensions) {
-								for (const [k, v] of Object.entries(o.extensions)) {
-									if (k.startsWith("x-"))
-										(doc as Record<string, unknown>)[k] = v as any;
-								}
-							}
-						}
-					} catch {}
+    // MOUNT ROUTES by file system (fora daqui)
+    // mountFileRouter(this.app, { routesDir: "./src/routes", basePath: "" });
 
-					return c.json(doc, {
-						headers: {
-							"Access-Control-Allow-Origin": "*",
-							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-							"Access-Control-Allow-Headers": "Content-Type, Authorization",
-							"Content-Type": "application/json",
-						},
-					});
-				} else {
-					// Fallback para o sistema de registro em tempo de execução
-					const serverUrl = new URL(c.req.url);
-					const doc = buildOpenAPIDocument({
-						title: "API",
-						version: "1.0.0",
-						servers: [{ url: `${serverUrl.protocol}//${serverUrl.host}` }],
-					});
-					// Merge root-level overrides from serve({ openapi })
-					try {
-						const o = getRootOverrides();
-						if (o) {
-							if (o.info)
-								(doc as any).info = { ...(doc as any).info, ...o.info };
-							if (o.servers?.length) (doc as any).servers = o.servers;
-							if (o.tags?.length) (doc as any).tags = o.tags as any;
-							if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
-							if (o.components?.securitySchemes) {
-								(doc as any).components = (doc as any).components || {};
-								(doc as any).components.securitySchemes = {
-									...((doc as any).components?.securitySchemes || {}),
-									...o.components.securitySchemes,
-								};
-							}
-							if (o.extensions) {
-								for (const [k, v] of Object.entries(o.extensions)) {
-									if (k.startsWith("x-"))
-										(doc as Record<string, unknown>)[k] = v as any;
-								}
-							}
-						}
-					} catch {}
-					return c.json(doc, {
-						headers: {
-							"Access-Control-Allow-Origin": "*",
-							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-							"Access-Control-Allow-Headers": "Content-Type, Authorization",
-							"Content-Type": "application/json",
-						},
-					});
-				}
-			} catch (error) {
-				this.log.error("OpenAPI generation error:", error);
-				return c.json(
-					{
-						error: "Failed to generate OpenAPI document",
-						details: error instanceof Error ? error.message : String(error),
-					},
-					500,
-				);
-			}
-		});
+    // ── OpenAPI JSON é servido do arquivo gerado estaticamente
+    this.app.get("/openapi.json", async (c) => {
+      try {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
 
-		// ── UI do Scalar em /docs
-		this.app.get(
-			"/docs",
-			Scalar({
-				theme: "default",
-				layout: "modern",
-				spec: {
-					url: "/openapi.json",
-				},
-			} as unknown as Parameters<
-				typeof Scalar
-			>[0]) as unknown as MiddlewareHandler,
-		);
+        // Tenta carregar o arquivo openapi.json gerado estaticamente
+        const openapiPath = path.join(process.cwd(), "openapi.json");
 
-		this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
-		this.app.onError((err, c) => {
-			this.log.error(err);
-			return c.json({ error: "Internal Server Error" }, 500);
-		});
-	}
+        const genCtl = getOpenAPIGeneration();
+        if (genCtl.mode === "memory") {
+          try {
+            const p = await import("node:path");
+            const os = await import("node:os");
+            const fs2 = await import("node:fs");
+            const { generateOpenAPI } = await import(
+              "./openapi/generator/index.ts"
+            );
+            const tmpFile = p.join(os.tmpdir(), `openapi.${Date.now()}.json`);
+            await generateOpenAPI(genCtl.project || "./tsconfig.json", tmpFile);
+            const doc = JSON.parse(fs2.readFileSync(tmpFile, "utf-8"));
+            try {
+              fs2.unlinkSync(tmpFile);
+            } catch {}
+            // Merge defaults then root overrides
+            try {
+              const apply = (o?: Record<string, any>) => {
+                if (!o) return;
+                if (o.info)
+                  (doc as any).info = { ...(doc as any).info, ...o.info };
+                if (o.servers?.length) (doc as any).servers = o.servers;
+                if (o.tags?.length) (doc as any).tags = o.tags as any;
+                if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+                if (o.components?.securitySchemes) {
+                  (doc as any).components = (doc as any).components || {};
+                  (doc as any).components.securitySchemes = {
+                    ...((doc as any).components?.securitySchemes || {}),
+                    ...o.components.securitySchemes,
+                  };
+                }
+                if (o.extensions) {
+                  for (const [k, v] of Object.entries(o.extensions)) {
+                    if (k.startsWith("x-"))
+                      (doc as Record<string, unknown>)[k] = v as any;
+                  }
+                }
+              };
+              apply(getDefaultOpenAPI());
+              apply(getRootOverrides());
+            } catch {}
+            // Interpolate placeholders in servers for memory mode
+            try {
+              const u = new URL(c.req.url);
+              const proto = u.protocol.replace(":", "");
+              const port = u.port || (u.protocol === "https:" ? "443" : "80");
+              const origin = `${u.protocol}//${u.host}`;
+              if (Array.isArray((doc as any).servers)) {
+                (doc as any).servers = (doc as any).servers.map((s: any) => ({
+                  ...s,
+                  url: String(s.url ?? "")
+                    .replaceAll("${protocol}", proto)
+                    .replaceAll("${host}", u.hostname)
+                    .replaceAll("${port}", port)
+                    .replaceAll("${origin}", origin),
+                }));
+              }
+            } catch {
+              // noop
+            }
 
-	async configureRoutes(
-		routesDir: string = "./src/routes",
-		basePath = "",
-	): Promise<void> {
-		this.setupApp();
-		await mountFileRouter(this.app, { routesDir, basePath });
-		// const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
-		// generateOpenAPI(routesDir, "openapi.json");
-	}
+            await interpolateDoc(doc as any, c);
+            return c.json(doc, {
+              headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods":
+                  "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Content-Type": "application/json",
+              },
+            });
+          } catch {
+            // noop
+          }
+        }
 
-	start(port?: number): void {
-		const finalPort = port ?? this.port;
-		this.log.info(
-			`🚀 Listening on http://localhost:${finalPort}  •  Docs: http://localhost:${finalPort}/docs`,
-		);
-		serve({ fetch: this.app.fetch, port: finalPort });
-	}
+        if (fs.existsSync(openapiPath)) {
+          const openapiContent = fs.readFileSync(openapiPath, "utf-8");
+          const doc = JSON.parse(openapiContent);
+          // Merge defaults then root-level overrides
+          try {
+            const apply = (o?: Record<string, any>) => {
+              if (!o) return;
+              if (o.info)
+                (doc as any).info = { ...(doc as any).info, ...o.info };
+              if (o.servers?.length) {
+                const u = new URL(c.req.url);
+                const proto = u.protocol.replace(":", "");
+                const port = u.port || (u.protocol === "https:" ? "443" : "80");
+                const origin = `${u.protocol}//${u.host}`;
+                (doc as any).servers = o.servers.map((s: any) => ({
+                  ...s,
+                  url: String(s.url ?? "")
+                    .replaceAll("${protocol}", proto)
+                    .replaceAll("${host}", u.hostname)
+                    .replaceAll("${port}", port)
+                    .replaceAll("${origin}", origin),
+                }));
+              }
+              if (o.tags?.length) (doc as any).tags = o.tags as any;
+              if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+              if (o.components?.securitySchemes) {
+                (doc as any).components = (doc as any).components || {};
+                (doc as any).components.securitySchemes = {
+                  ...((doc as any).components?.securitySchemes || {}),
+                  ...o.components.securitySchemes,
+                };
+              }
+              if (o.extensions) {
+                for (const [k, v] of Object.entries(o.extensions)) {
+                  if (k.startsWith("x-"))
+                    (doc as Record<string, unknown>)[k] = v as any;
+                }
+              }
+            };
+            apply(getDefaultOpenAPI());
+            apply(getRootOverrides());
+          } catch {
+            // noop
+          }
+
+          // Final interpolation of server URL placeholders
+          try {
+            const u = new URL(c.req.url);
+            const proto = u.protocol.replace(":", "");
+            const port = u.port || (u.protocol === "https:" ? "443" : "80");
+            const origin = `${u.protocol}//${u.host}`;
+            if (Array.isArray((doc as any).servers)) {
+              (doc as any).servers = (doc as any).servers.map((s: any) => ({
+                ...s,
+                url: String(s.url ?? "")
+                  .replaceAll("${protocol}", proto)
+                  .replaceAll("${host}", u.hostname)
+                  .replaceAll("${port}", port)
+                  .replaceAll("${origin}", origin),
+              }));
+            }
+          } catch {
+            // noop
+          }
+
+          await interpolateDoc(doc as any, c);
+          return c.json(doc, {
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "Content-Type": "application/json",
+            },
+          });
+        } else {
+          // Fallback para o sistema de registro em tempo de execução
+          const serverUrl = new URL(c.req.url);
+          const doc = buildOpenAPIDocument({
+            title: "API",
+            version: "1.0.0",
+            servers: [{ url: `${serverUrl.protocol}//${serverUrl.host}` }],
+          });
+          // Merge root-level overrides from serve({ openapi })
+          try {
+            const o = getRootOverrides();
+            if (o) {
+              if (o.info)
+                (doc as any).info = { ...(doc as any).info, ...o.info };
+              if (o.servers?.length) {
+                const u = new URL(c.req.url);
+                const proto = u.protocol.replace(":", "");
+                const port = u.port || (u.protocol === "https:" ? "443" : "80");
+                const origin = `${u.protocol}//${u.host}`;
+                (doc as any).servers = o.servers.map((s) => ({
+                  ...s,
+                  url: s.url
+                    .replaceAll("${protocol}", proto)
+                    .replaceAll("${host}", u.hostname)
+                    .replaceAll("${port}", port)
+                    .replaceAll("${origin}", origin),
+                }));
+              }
+              if (o.tags?.length) (doc as any).tags = o.tags as any;
+              if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+              if (o.components?.securitySchemes) {
+                (doc as any).components = (doc as any).components || {};
+                (doc as any).components.securitySchemes = {
+                  ...((doc as any).components?.securitySchemes || {}),
+                  ...o.components.securitySchemes,
+                };
+              }
+              if (o.extensions) {
+                for (const [k, v] of Object.entries(o.extensions)) {
+                  if (k.startsWith("x-"))
+                    (doc as Record<string, unknown>)[k] = v as any;
+                }
+              }
+            }
+          } catch {}
+          // Final interpolation of server URL placeholders
+          try {
+            const u = new URL(c.req.url);
+            const proto = u.protocol.replace(":", "");
+            const port = u.port || (u.protocol === "https:" ? "443" : "80");
+            const origin = `${u.protocol}//${u.host}`;
+            if (Array.isArray((doc as any).servers)) {
+              (doc as any).servers = (doc as any).servers.map((s: any) => ({
+                ...s,
+                url: String(s.url ?? "")
+                  .replaceAll("${protocol}", proto)
+                  .replaceAll("${host}", u.hostname)
+                  .replaceAll("${port}", port)
+                  .replaceAll("${origin}", origin),
+              }));
+            }
+          } catch {
+            // noop
+          }
+
+          return c.json(doc, {
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "Content-Type": "application/json",
+            },
+          });
+        }
+      } catch (error) {
+        this.log.error("OpenAPI generation error:", error);
+        return c.json(
+          {
+            error: "Failed to generate OpenAPI document",
+            details: error instanceof Error ? error.message : String(error),
+          },
+          500
+        );
+      }
+    });
+
+    // ── UI do Scalar em /docs
+    this.app.get(
+      "/docs",
+      Scalar({
+        theme: "default",
+        layout: "modern",
+        spec: {
+          url: "/openapi.json",
+        },
+      } as unknown as Parameters<typeof Scalar>[0]) as unknown as MiddlewareHandler
+    );
+
+    this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
+    this.app.onError((err, c) => {
+      this.log.error(err);
+      return c.json({ error: "Internal Server Error" }, 500);
+    });
+  }
+
+  async configureRoutes(
+    routesDir: string = "./src/routes",
+    basePath = ""
+  ): Promise<void> {
+    this.setupApp();
+    await mountFileRouter(this.app, { routesDir, basePath });
+    // const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
+    // generateOpenAPI(routesDir, "openapi.json");
+  }
+
+  start(port?: number): void {
+    const finalPort = port ?? this.port;
+    this.log.info(
+      `🚀 Listening on http://localhost:${finalPort}  •  Docs: http://localhost:${finalPort}/docs`
+    );
+    serve({ fetch: this.app.fetch, port: finalPort });
+  }
 }
