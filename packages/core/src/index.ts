@@ -20,17 +20,22 @@ export * from "./server.ts";
 export { default as Server } from "./server.ts";
 
 import ApiServer from "@ts-api-kit/core/server";
+import { generateOpenAPI } from "./openapi/generator/index.ts";
+import { type RootOverrides, setRootOverrides } from "./openapi/overrides.ts";
 
 interface ServeOptions {
 	port?: number;
-	compile?: (routesDir: string, openapiFile: string) => void | Promise<void>;
+	/** Root-level OpenAPI metadata applied to the final document. */
+	openapi?: RootOverrides;
 }
 
 export const serve = async (options: ServeOptions = {}) => {
 	const port = options.port ?? 3000;
 	const routesDir = `./src/routes`;
 	const server = new ApiServer();
+	// Store doc-level overrides for later merge when serving /openapi.json
+	setRootOverrides(options.openapi);
 	await server.configureRoutes(routesDir);
-	await options.compile?.(routesDir, "./openapi.json");
+	await generateOpenAPI(routesDir, "./openapi.json");
 	server.start(port);
 };
