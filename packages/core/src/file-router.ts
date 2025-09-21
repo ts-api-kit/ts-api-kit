@@ -1,6 +1,7 @@
+import process from "node:process";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
-import type { Hono, MiddlewareHandler, Handler } from "hono";
+import type { Handler, Hono, MiddlewareHandler } from "hono";
 import { dirname, resolve } from "pathe";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
@@ -23,22 +24,22 @@ import { toArray } from "./utils.ts";
  * force re-evaluation when files change; in production we import the stable URL.
  */
 function toModuleUrl(file: string): string {
-    const base = pathToFileURL(file).href;
-    if ((process.env.NODE_ENV || "").toLowerCase() === "development") {
-        return `${base}?v=${Date.now()}`;
-    }
-    return base;
+	const base = pathToFileURL(file).href;
+	if ((process.env.NODE_ENV || "").toLowerCase() === "development") {
+		return `${base}?v=${Date.now()}`;
+	}
+	return base;
 }
 
 async function safeDynamicImport<T = unknown>(specifier: string): Promise<T> {
-    try {
-        // Attempt import as-is (may include dev cache-busting query)
-        return (await import(specifier)) as T;
-    } catch {
-        // Fallback: strip any query/hash for environments that disallow it
-        const clean = specifier.split("?")[0].split("#")[0];
-        return (await import(clean)) as T;
-    }
+	try {
+		// Attempt import as-is (may include dev cache-busting query)
+		return (await import(specifier)) as T;
+	} catch {
+		// Fallback: strip any query/hash for environments that disallow it
+		const clean = specifier.split("?")[0].split("#")[0];
+		return (await import(clean)) as T;
+	}
 }
 /**
  * Options to drive file-based route discovery and mounting.
@@ -47,23 +48,23 @@ async function safeDynamicImport<T = unknown>(specifier: string): Promise<T> {
  * handlers and middleware to a Hono app while keeping OpenAPI metadata in sync.
  */
 export interface FileRouterOptions {
-    /**
-     * Absolute or relative path to the routes directory root.
-     * Example: `./src/routes`.
-     */
-    routesDir: string;
-    /**
-     * Glob patterns to find route files. Defaults to all `+route.*` under subfolders.
-     */
-    routeGlobs?: string[];
-    /**
-     * Glob patterns to find middleware files. Defaults to all `+middleware.*` under subfolders.
-     */
-    middlewareGlobs?: string[];
-    /**
-     * Optional base path where routes are mounted (e.g. `/api`).
-     */
-    basePath?: string;
+	/**
+	 * Absolute or relative path to the routes directory root.
+	 * Example: `./src/routes`.
+	 */
+	routesDir: string;
+	/**
+	 * Glob patterns to find route files. Defaults to all `+route.*` under subfolders.
+	 */
+	routeGlobs?: string[];
+	/**
+	 * Glob patterns to find middleware files. Defaults to all `+middleware.*` under subfolders.
+	 */
+	middlewareGlobs?: string[];
+	/**
+	 * Optional base path where routes are mounted (e.g. `/api`).
+	 */
+	basePath?: string;
 }
 
 // HTTP method exports that we can infer from
@@ -146,10 +147,10 @@ export async function mountFileRouter(
 
 	log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
-    for (const file of sortByDepthAsc(mwFiles)) {
-        const dir = dirname(file);
-        const modUrl = toModuleUrl(file);
-        const mod = (await safeDynamicImport<Partial<MiddlewareModule>>(modUrl));
+	for (const file of sortByDepthAsc(mwFiles)) {
+		const dir = dirname(file);
+		const modUrl = toModuleUrl(file);
+		const mod = await safeDynamicImport<Partial<MiddlewareModule>>(modUrl);
 		const list = toArray(
 			mod.middleware as MiddlewareHandler | MiddlewareHandler[],
 		);
@@ -159,8 +160,8 @@ export async function mountFileRouter(
 		mwsByDir.set(dir, arr);
 	}
 	let routesMounted = 0;
-    for (const file of sortByDepthDesc(routeFiles)) {
-        const modUrl = toModuleUrl(file);
+	for (const file of sortByDepthDesc(routeFiles)) {
+		const modUrl = toModuleUrl(file);
 
 		log.debug(`Processing file: ${file}`);
 		log.debug(`Module URL: ${modUrl}`);
@@ -172,7 +173,7 @@ export async function mountFileRouter(
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
-        const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
+		const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
 		log.debug(`Module exports:`, Object.keys(mod));
 
 		// Support both named exports and default export
@@ -225,9 +226,20 @@ export async function mountFileRouter(
 
 			log.debug(`Adding ${method.toUpperCase()} handler to ${hono}`);
 
-			// Register in Hono with the runtime path
-			// @ts-expect-error dynamic method indexing
-			app[method](hono, handler);
+			// Register in Hono with the runtime path. Some environments or versions
+			// may not expose a direct method (e.g. app.delete as a reserved name).
+			// Prefer the direct method when available, otherwise fall back to app.on().
+			const direct = (app as unknown as Record<string, unknown>)[method];
+			if (typeof direct === "function") {
+				// @ts-expect-error dynamic method indexing
+				app[method](hono, handler);
+			} else {
+				// Use generic registrar as a robust fallback
+				// Hono expects the HTTP verb in uppercase for app.on()
+				(
+					app as unknown as { on: (m: string, p: string, h: Handler) => void }
+				).on(method.toUpperCase(), hono, handler as unknown as Handler);
+			}
 
 			// Register OpenAPI metadata
 			if (mergedOA.method && mergedOA.path) {

@@ -16,21 +16,25 @@ import process from "node:process";
 type LevelName = "silent" | "error" | "warn" | "info" | "debug";
 
 const LEVELS: Record<LevelName, number> = {
-  silent: 0,
-  error: 1,
-  warn: 2,
-  info: 3,
-  debug: 4,
+	silent: 0,
+	error: 1,
+	warn: 2,
+	info: 3,
+	debug: 4,
 };
 
 let currentLevel: LevelName = inferInitialLevel();
 
 function inferInitialLevel(): LevelName {
-  const env = (process.env.TS_API_KIT_LOG_LEVEL || process.env.TS_API_KIT_LOG || "").toLowerCase();
-  if (env && env in LEVELS) return env as LevelName;
-  const dbg = (process.env.DEBUG || "").toLowerCase();
-  if (dbg === "*" || dbg.includes("ts-api-kit")) return "debug";
-  return "info";
+	const env = (
+		process.env.TS_API_KIT_LOG_LEVEL ||
+		process.env.TS_API_KIT_LOG ||
+		""
+	).toLowerCase();
+	if (env && env in LEVELS) return env as LevelName;
+	const dbg = (process.env.DEBUG || "").toLowerCase();
+	if (dbg === "*" || dbg.includes("ts-api-kit")) return "debug";
+	return "info";
 }
 
 /**
@@ -38,38 +42,38 @@ function inferInitialLevel(): LevelName {
  * Accepts `silent | error | warn | info | debug`.
  */
 export function setLogLevel(level: LevelName | string | undefined): void {
-  if (!level) return;
-  const key = String(level).toLowerCase();
-  if (key in LEVELS) currentLevel = key as LevelName;
+	if (!level) return;
+	const key = String(level).toLowerCase();
+	if (key in LEVELS) currentLevel = key as LevelName;
 }
 
 /**
  * Gets the current global log level.
  */
 export function getLogLevel(): LevelName {
-  return currentLevel;
+	return currentLevel;
 }
 
 function enabled(min: LevelName): boolean {
-  return LEVELS[currentLevel] >= LEVELS[min];
+	return LEVELS[currentLevel] >= LEVELS[min];
 }
 
 function ts(): string {
-  return new Date().toISOString();
+	return new Date().toISOString();
 }
 
 function fmt(ns: string | undefined, msg: unknown): string {
-  return ns ? `[${ns}] ${String(msg)}` : String(msg);
+	return ns ? `[${ns}] ${String(msg)}` : String(msg);
 }
 
 /**
  * Minimal logger interface used across the kit.
  */
 export type Logger = {
-  debug: (...args: unknown[]) => void;
-  info: (...args: unknown[]) => void;
-  warn: (...args: unknown[]) => void;
-  error: (...args: unknown[]) => void;
+	debug: (...args: unknown[]) => void;
+	info: (...args: unknown[]) => void;
+	warn: (...args: unknown[]) => void;
+	error: (...args: unknown[]) => void;
 };
 
 /**
@@ -78,31 +82,30 @@ export type Logger = {
  * Namespace appears in log output as `[namespace]`.
  */
 export function createLogger(namespace?: string): Logger {
-  const ns = namespace;
-  return {
-    debug: (...args: unknown[]) => {
-      if (!enabled("debug")) return;
-      // eslint-disable-next-line no-console
-      console.debug(`🐛 ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
-    },
-    info: (...args: unknown[]) => {
-      if (!enabled("info")) return;
-      // eslint-disable-next-line no-console
-      console.log(`ℹ️  ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
-    },
-    warn: (...args: unknown[]) => {
-      if (!enabled("warn")) return;
-      // eslint-disable-next-line no-console
-      console.warn(`⚠️  ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
-    },
-    error: (...args: unknown[]) => {
-      if (!enabled("error")) return;
-      // eslint-disable-next-line no-console
-      console.error(`❌ ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
-    },
-  };
+	const ns = namespace;
+	return {
+		debug: (...args: unknown[]) => {
+			if (!enabled("debug")) return;
+			// eslint-disable-next-line no-console
+			console.debug(`🐛 ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
+		},
+		info: (...args: unknown[]) => {
+			if (!enabled("info")) return;
+			// eslint-disable-next-line no-console
+			console.log(`ℹ️  ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
+		},
+		warn: (...args: unknown[]) => {
+			if (!enabled("warn")) return;
+			// eslint-disable-next-line no-console
+			console.warn(`⚠️  ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
+		},
+		error: (...args: unknown[]) => {
+			if (!enabled("error")) return;
+			// eslint-disable-next-line no-console
+			console.error(`❌ ${ts()} ${fmt(ns, args[0])}`, ...args.slice(1));
+		},
+	};
 }
 
 /** Default namespaced logger for quick use. */
 export const log: Logger = createLogger("ts-api-kit");
-

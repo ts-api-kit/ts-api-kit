@@ -7,7 +7,16 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["packages/*/src/**", "examples/simple-example/src/**", "src/**", "*.ts", "*.js", "*.tsx", "*.jsx", "*.json"],
+		"includes": [
+			"packages/*/src/**",
+			"examples/simple-example/src/**",
+			"src/**",
+			"*.ts",
+			"*.js",
+			"*.tsx",
+			"*.jsx",
+			"*.json"
+		],
 		"experimentalScannerIgnores": ["examples/frontend/**"]
 	},
 	"formatter": {

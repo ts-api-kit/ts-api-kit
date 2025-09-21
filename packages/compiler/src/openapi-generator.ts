@@ -4,33 +4,36 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
 import { createLogger } from "@ts-api-kit/core/utils";
-import * as ts from "typescript";
+import ts from "typescript";
 
 type Json = Record<string, unknown> | Json[] | string | number | boolean | null;
 
 type MediaTypeObject = { schema: Json; example?: unknown };
 type ParameterObject = {
-    name: string;
-    in: "query" | "path" | "header";
-    required?: boolean;
-    schema?: Json;
-    description?: string;
-    example?: unknown;
+	name: string;
+	in: "query" | "path" | "header";
+	required?: boolean;
+	schema?: Json;
+	description?: string;
+	example?: unknown;
 };
 type ResponseObject = {
-    description?: string;
-    content?: Record<string, MediaTypeObject>;
+	description?: string;
+	content?: Record<string, MediaTypeObject>;
 };
 type Operation = {
-    summary?: string;
-    description?: string;
-    tags?: string[];
-    deprecated?: boolean;
-    operationId?: string;
-    externalDocs?: { url: string; description?: string };
-    parameters?: ParameterObject[];
-    responses?: Record<string, ResponseObject>;
-    requestBody?: { required?: boolean; content: Record<string, MediaTypeObject> };
+	summary?: string;
+	description?: string;
+	tags?: string[];
+	deprecated?: boolean;
+	operationId?: string;
+	externalDocs?: { url: string; description?: string };
+	parameters?: ParameterObject[];
+	responses?: Record<string, ResponseObject>;
+	requestBody?: {
+		required?: boolean;
+		content: Record<string, MediaTypeObject>;
+	};
 };
 type OperationMap = Record<string, Operation>;
 
@@ -38,107 +41,122 @@ const log = createLogger("compiler:generator");
 
 // Simple schema registry to support $ref and avoid recursion on self-referential types
 const schemaRegistry = (() => {
-    let typeKeyToName = new Map<string, string>();
-    let usedNames = new Set<string>();
-    let schemas: Record<string, Json> = {};
-    let preferredNames = new Map<string, string>();
+	let typeKeyToName = new Map<string, string>();
+	let usedNames = new Set<string>();
+	let schemas: Record<string, Json> = {};
+	let preferredNames = new Map<string, string>();
 
-    function reset() {
-        typeKeyToName = new Map();
-        usedNames = new Set();
-        schemas = {};
-        preferredNames = new Map();
-    }
+	function reset() {
+		typeKeyToName = new Map();
+		usedNames = new Set();
+		schemas = {};
+		preferredNames = new Map();
+	}
 
-    function sanitizeName(name: string): string {
-        // Remove quotes and non-word chars to keep component keys stable
-        const base = name.replace(/["']/g, "").replace(/[^\w.-]/g, "_");
-        return base || "Anonymous";
-    }
+	function sanitizeName(name: string): string {
+		// Remove quotes and non-word chars to keep component keys stable
+		const base = name.replace(/["']/g, "").replace(/[^\w.-]/g, "_");
+		return base || "Anonymous";
+	}
 
-    function ensureUniqueName(base: string): string {
-        let name = sanitizeName(base);
-        if (!usedNames.has(name)) {
-            usedNames.add(name);
-            return name;
-        }
-        let i = 2;
-        while (usedNames.has(`${name}_${i}`)) i++;
-        const finalName = `${name}_${i}`;
-        usedNames.add(finalName);
-        return finalName;
-    }
+	function ensureUniqueName(base: string): string {
+		const name = sanitizeName(base);
+		if (!usedNames.has(name)) {
+			usedNames.add(name);
+			return name;
+		}
+		let i = 2;
+		while (usedNames.has(`${name}_${i}`)) i++;
+		const finalName = `${name}_${i}`;
+		usedNames.add(finalName);
+		return finalName;
+	}
 
-    function getOrRegister(typeKey: string, baseName: string): string {
-        const preferred = preferredNames.get(typeKey);
-        if (preferred && typeKeyToName.has(typeKey)) {
-            // already registered; keep the existing mapping
-            return typeKeyToName.get(typeKey)!;
-        }
-        const existing = typeKeyToName.get(typeKey);
-        if (existing) return existing;
-        const unique = ensureUniqueName(preferred ?? baseName);
-        typeKeyToName.set(typeKey, unique);
-        return unique;
-    }
+	function getOrRegister(typeKey: string, baseName: string): string {
+		const preferred = preferredNames.get(typeKey);
+		if (preferred && typeKeyToName.has(typeKey)) {
+			// already registered; keep the existing mapping
+			return typeKeyToName.get(typeKey) ?? "";
+		}
+		const existing = typeKeyToName.get(typeKey);
+		if (existing) return existing;
+		const unique = ensureUniqueName(preferred ?? baseName);
+		typeKeyToName.set(typeKey, unique);
+		return unique;
+	}
 
-    function setSchema(name: string, schema: Json) {
-        schemas[name] = schema;
-    }
+	function setSchema(name: string, schema: Json) {
+		schemas[name] = schema;
+	}
 
-    function has(typeKey: string) {
-        return typeKeyToName.has(typeKey);
-    }
+	function has(typeKey: string) {
+		return typeKeyToName.has(typeKey);
+	}
 
-    function getRefByKey(typeKey: string): { $ref: string } | null {
-        const name = typeKeyToName.get(typeKey);
-        if (!name) return null;
-        return { $ref: `#/components/schemas/${name}` };
-    }
+	function getRefByKey(typeKey: string): { $ref: string } | null {
+		const name = typeKeyToName.get(typeKey);
+		if (!name) return null;
+		return { $ref: `#/components/schemas/${name}` };
+	}
 
-    function getSchemas() {
-        return schemas;
-    }
+	function getSchemas() {
+		return schemas;
+	}
 
-    function setPreferredName(typeKey: string, name: string) {
-        preferredNames.set(typeKey, name);
-    }
+	function setPreferredName(typeKey: string, name: string) {
+		preferredNames.set(typeKey, name);
+	}
 
-    return { reset, getOrRegister, setSchema, has, getRefByKey, getSchemas, setPreferredName };
+	return {
+		reset,
+		getOrRegister,
+		setSchema,
+		has,
+		getRefByKey,
+		getSchemas,
+		setPreferredName,
+	};
 })();
 
 function getTypeIdentity(
-    type: ts.Type,
-    checker: ts.TypeChecker,
+	type: ts.Type,
+	checker: ts.TypeChecker,
 ): { key: string; name: string } | null {
-    const sym: ts.Symbol | undefined = (type.aliasSymbol ?? type.symbol) as
-        | ts.Symbol
-        | undefined;
-    if (!sym) return null;
-    // Some anonymous object types appear as "__type"
-    const rawName = (sym.getName ? sym.getName() : String((sym as any).escapedName)) || "Anonymous";
-    if (rawName === "__type") return null;
+	const sym: ts.Symbol | undefined = (type.aliasSymbol ?? type.symbol) as
+		| ts.Symbol
+		| undefined;
+	if (!sym) return null;
+	// Some anonymous object types appear as "__type"
+	// Prefer public API getName, fallback to internal escapedName without using any
+	const maybeInternal = sym as unknown as {
+		escapedName?: unknown;
+		id?: unknown;
+	};
+	const rawName =
+		(sym.getName ? sym.getName() : String(maybeInternal.escapedName ?? "")) ||
+		"Anonymous";
+	if (rawName === "__type") return null;
 
-    let key: string;
-    const sid = (sym as any)?.id;
-    if (typeof sid === "number") {
-        key = `sym#${sid}`;
-    } else {
-        try {
-            key = checker.getFullyQualifiedName(sym);
-        } catch {
-            key = rawName;
-        }
-    }
-    return { key, name: rawName };
+	let key: string;
+	const sid = maybeInternal?.id;
+	if (typeof sid === "number") {
+		key = `sym#${sid}`;
+	} else {
+		try {
+			key = checker.getFullyQualifiedName(sym);
+		} catch {
+			key = rawName;
+		}
+	}
+	return { key, name: rawName };
 }
 
 // Function to process a route file and extract HTTP operations
 function processRouteFile(
-    sourceFile: ts.SourceFile,
-    checker: ts.TypeChecker,
+	sourceFile: ts.SourceFile,
+	checker: ts.TypeChecker,
 ): OperationMap {
-    const operations: OperationMap = {};
+	const operations: OperationMap = {};
 
 	// Walk through the AST to find exported variables
 	function visit(node: ts.Node) {
@@ -205,10 +223,10 @@ function processRouteFile(
 
 // Function to extract responses from handle call
 function extractResponsesFromHandle(
-    declaration: ts.VariableDeclaration,
-    checker: ts.TypeChecker,
+	declaration: ts.VariableDeclaration,
+	checker: ts.TypeChecker,
 ): Record<string, ResponseObject> {
-    const responses: Record<string, ResponseObject> = {};
+	const responses: Record<string, ResponseObject> = {};
 
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
@@ -255,20 +273,20 @@ function extractResponsesFromHandle(
 									checker,
 								);
 
-                            const responseObj = response as Partial<{
-                                description: string;
-                                contentType: string;
-                                examples: unknown;
-                            }>;
-                            responses[code] = {
-                                description: responseObj?.description || "Response",
-                                content: {
-                                    [responseObj?.contentType || "application/json"]: {
-                                        schema: responseType,
-                                        example: responseObj?.examples,
-                                    },
-                                },
-                            };
+								const responseObj = response as Partial<{
+									description: string;
+									contentType: string;
+									examples: unknown;
+								}>;
+								responses[code] = {
+									description: responseObj?.description || "Response",
+									content: {
+										[responseObj?.contentType || "application/json"]: {
+											schema: responseType,
+											example: responseObj?.examples,
+										},
+									},
+								};
 							}
 						}
 					}
@@ -282,10 +300,10 @@ function extractResponsesFromHandle(
 
 // Function to extract parameters from handle call
 function extractParametersFromHandle(
-    declaration: ts.VariableDeclaration,
-    checker: ts.TypeChecker,
+	declaration: ts.VariableDeclaration,
+	checker: ts.TypeChecker,
 ): ParameterObject[] {
-    const parameters: ParameterObject[] = [];
+	const parameters: ParameterObject[] = [];
 
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
@@ -333,10 +351,10 @@ function extractParametersFromHandle(
 
 // Function to extract query parameters from valibot schema
 function extractQueryParameters(
-    openapiExpression: ts.Expression,
-    checker: ts.TypeChecker,
+	openapiExpression: ts.Expression,
+	checker: ts.TypeChecker,
 ): ParameterObject[] {
-    const parameters: ParameterObject[] = [];
+	const parameters: ParameterObject[] = [];
 
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return parameters;
@@ -416,8 +434,8 @@ function extractQueryParameters(
 
 // Function to extract request body from handle call
 function extractRequestBodyFromHandle(
-    declaration: ts.VariableDeclaration,
-    checker: ts.TypeChecker,
+	declaration: ts.VariableDeclaration,
+	checker: ts.TypeChecker,
 ): Operation["requestBody"] | null {
 	// Check if the declaration has an initializer
 	if (!declaration.initializer) {
@@ -460,8 +478,8 @@ function extractRequestBodyFromHandle(
 
 // Function to extract request body from valibot schema
 function extractRequestBody(
-    openapiExpression: ts.Expression,
-    checker: ts.TypeChecker,
+	openapiExpression: ts.Expression,
+	checker: ts.TypeChecker,
 ): Operation["requestBody"] | null {
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return null;
@@ -527,26 +545,26 @@ function extractRequestBody(
 
 	return {
 		required: true,
-            content: {
-                [contentType]: {
-                    schema: schema,
-                    example: jsdoc.example,
-                },
-            },
+		content: {
+			[contentType]: {
+				schema: schema,
+				example: jsdoc.example,
+			},
+		},
 	};
 }
 
 // Function to extract parameter information from valibot property
 type ExtractedParamInfo = {
-    required: boolean;
-    schema: Json;
-    description?: string;
-    example?: string;
+	required: boolean;
+	schema: Json;
+	description?: string;
+	example?: string;
 };
 
 function extractParameterInfo(
-    property: ts.PropertyAssignment,
-    checker: ts.TypeChecker,
+	property: ts.PropertyAssignment,
+	checker: ts.TypeChecker,
 ): ExtractedParamInfo | null {
 	const name = getPropertyName(property.name);
 	if (!name) return null;
@@ -566,18 +584,18 @@ function extractParameterInfo(
 		property.initializer.expression.expression.text === "v" &&
 		property.initializer.expression.name.text === "optional";
 
-    return {
-        required: !isOptional,
-        schema: schema,
-        description: jsdoc.description,
-        example: jsdoc.example,
-    };
+	return {
+		required: !isOptional,
+		schema: schema,
+		description: jsdoc.description,
+		example: jsdoc.example,
+	};
 }
 
 // Function to extract valibot schema information
 function extractValibotSchema(
-    expression: ts.Expression,
-    checker: ts.TypeChecker,
+	expression: ts.Expression,
+	checker: ts.TypeChecker,
 ): Json {
 	if (ts.isCallExpression(expression)) {
 		const callExpression = expression.expression;
@@ -601,19 +619,19 @@ function extractValibotSchema(
 							const elementType = extractValibotSchema(arrayArgs[0], checker);
 							return {
 								type: "array",
-                        items: elementType || { type: "unknown" },
-                    };
-                }
-                return { type: "array", items: { type: "unknown" } };
-            }
-            case "object": {
+								items: elementType || { type: "unknown" },
+							};
+						}
+						return { type: "array", items: { type: "unknown" } };
+					}
+					case "object": {
 						// Handle v.object() - extract the properties
 						const objectArgs = expression.arguments;
 						if (
 							objectArgs.length > 0 &&
 							ts.isObjectLiteralExpression(objectArgs[0])
 						) {
-                    const properties: Record<string, Json> = {};
+							const properties: Record<string, Json> = {};
 							const required: string[] = [];
 
 							for (const property of objectArgs[0].properties) {
@@ -661,6 +679,93 @@ function extractValibotSchema(
 						}
 						break;
 					}
+					case "union": {
+						// Handle v.union([...]) - prefer enum when all literals
+						const unionArgs = expression.arguments;
+						if (
+							unionArgs.length > 0 &&
+							ts.isArrayLiteralExpression(unionArgs[0])
+						) {
+							const elems = unionArgs[0].elements;
+							const values: unknown[] = [];
+							let allLiteral = true;
+
+							for (const el of elems) {
+								if (
+									ts.isCallExpression(el) &&
+									ts.isPropertyAccessExpression(el.expression) &&
+									ts.isIdentifier(el.expression.expression) &&
+									el.expression.expression.text === "v" &&
+									el.expression.name.text === "literal" &&
+									el.arguments.length > 0
+								) {
+									const litArg = el.arguments[0];
+									if (
+										ts.isStringLiteral(litArg) ||
+										ts.isNumericLiteral(litArg)
+									) {
+										values.push(litArg.text);
+										continue;
+									}
+									if (
+										(litArg.kind as unknown as number) ===
+											ts.SyntaxKind.TrueKeyword ||
+										(litArg.kind as unknown as number) ===
+											ts.SyntaxKind.FalseKeyword
+									) {
+										values.push(
+											(litArg.kind as unknown as number) ===
+												ts.SyntaxKind.TrueKeyword,
+										);
+										continue;
+									}
+								}
+								allLiteral = false;
+								break;
+							}
+
+							if (allLiteral && values.length > 0) {
+								const t = typeof values[0];
+								const out: Record<string, Json> = { enum: values as Json[] };
+								if (t === "string" || t === "number" || t === "boolean")
+									out.type = t;
+								return out;
+							}
+
+							// Fallback: map to anyOf
+							const schemas = elems.map((e) =>
+								extractValibotSchema(e as ts.Expression, checker),
+							);
+							return { anyOf: schemas as unknown as Json[] } as unknown as Json;
+						}
+						break;
+					}
+					case "literal": {
+						// Handle v.literal(value)
+						const args = expression.arguments;
+						if (args.length > 0) {
+							const arg = args[0];
+							if (ts.isStringLiteral(arg) || ts.isNumericLiteral(arg)) {
+								return {
+									type: typeof arg.text,
+									enum: [arg.text],
+								} as unknown as Json;
+							}
+							if (
+								(arg.kind as unknown as number) === ts.SyntaxKind.TrueKeyword ||
+								(arg.kind as unknown as number) === ts.SyntaxKind.FalseKeyword
+							) {
+								return {
+									type: "boolean",
+									enum: [
+										((arg.kind as unknown as number) ===
+											ts.SyntaxKind.TrueKeyword) as unknown as Json,
+									],
+								} as unknown as Json;
+							}
+						}
+						break;
+					}
 					case "pipe": {
 						// Handle v.pipe() - extract the final type (last argument)
 						const pipeArgs = expression.arguments;
@@ -690,25 +795,27 @@ function extractValibotSchema(
 }
 
 // Helper function to extract object literal values
-function extractObjectLiteralValue(expression: ts.Expression): Record<string, Json> | null {
-    if (!ts.isObjectLiteralExpression(expression)) {
-        return null;
-    }
+function extractObjectLiteralValue(
+	expression: ts.Expression,
+): Record<string, Json> | null {
+	if (!ts.isObjectLiteralExpression(expression)) {
+		return null;
+	}
 
-    const result: Record<string, Json> = {};
+	const result: Record<string, Json> = {};
 
 	for (const property of expression.properties) {
 		if (!ts.isPropertyAssignment(property)) continue;
 
-        const name = getPropertyName(property.name);
-        if (!name) continue;
+		const name = getPropertyName(property.name);
+		if (!name) continue;
 
-        const value = extractValue(property.initializer);
-        if (value !== null) {
-            result[name] = value;
-        }
-    }
-    return result;
+		const value = extractValue(property.initializer);
+		if (value !== null) {
+			result[name] = value;
+		}
+	}
+	return result;
 }
 
 // Helper function to get property name
@@ -735,25 +842,27 @@ function extractValue(expression: ts.Expression): Json | null {
 		return false;
 	} else if (expression.kind === ts.SyntaxKind.NullKeyword) {
 		return null;
-    } else if (ts.isArrayLiteralExpression(expression)) {
-        const arr: Json[] = [];
-        for (const el of expression.elements) {
-            const v = extractValue(el);
-            if (v !== null) arr.push(v);
-        }
-        return arr;
-    } else if (ts.isObjectLiteralExpression(expression)) {
-        return extractObjectLiteralValue(expression);
-    } else if (ts.isCallExpression(expression)) {
-        // Handle response.of() calls
-        return extractResponseOf(expression) as unknown as Json;
-    }
+	} else if (ts.isArrayLiteralExpression(expression)) {
+		const arr: Json[] = [];
+		for (const el of expression.elements) {
+			const v = extractValue(el);
+			if (v !== null) arr.push(v);
+		}
+		return arr;
+	} else if (ts.isObjectLiteralExpression(expression)) {
+		return extractObjectLiteralValue(expression);
+	} else if (ts.isCallExpression(expression)) {
+		// Handle response.of() calls
+		return extractResponseOf(expression) as unknown as Json;
+	}
 
 	return null;
 }
 
 // Helper function to extract response.of() calls
-function extractResponseOf(callExpression: ts.CallExpression): Record<string, Json> | null {
+function extractResponseOf(
+	callExpression: ts.CallExpression,
+): Record<string, Json> | null {
 	const expression = callExpression.expression;
 
 	if (!ts.isPropertyAccessExpression(expression)) {
@@ -773,20 +882,20 @@ function extractResponseOf(callExpression: ts.CallExpression): Record<string, Js
 		}
 
 		// Return basic response marker if no metadata provided
-        return {
-            description: "Response",
-            contentType: "application/json",
-        };
-    }
+		return {
+			description: "Response",
+			contentType: "application/json",
+		};
+	}
 
-    return null;
+	return null;
 }
 
 // Function to extract response type from response marker
 function extractResponseTypeFromMarker(
-    openapiExpression: ts.Expression,
-    responseCode: string,
-    checker: ts.TypeChecker,
+	openapiExpression: ts.Expression,
+	responseCode: string,
+	checker: ts.TypeChecker,
 ): Json {
 	if (!ts.isObjectLiteralExpression(openapiExpression)) {
 		return {};
@@ -843,46 +952,46 @@ function extractResponseTypeFromMarker(
 		return {};
 	}
 
-    const typeArg = typeArgs[0];
-    const type = checker.getTypeAtLocation(typeArg);
+	const typeArg = typeArgs[0];
+	const type = checker.getTypeAtLocation(typeArg);
 
-    // If response.of<T>(meta) has a { name: string } or { schemaName: string }, use it as preferred component name
-    let preferredName: string | undefined;
-    const callArgs = responseExpression.arguments;
-    if (callArgs.length > 0 && ts.isObjectLiteralExpression(callArgs[0])) {
-        for (const prop of callArgs[0].properties) {
-            if (!ts.isPropertyAssignment(prop)) continue;
-            const propName = getPropertyName(prop.name);
-            if (!propName) continue;
-            if (propName === "name" || propName === "schemaName") {
-                if (ts.isStringLiteral(prop.initializer)) {
-                    preferredName = prop.initializer.text;
-                    break;
-                }
-            }
-        }
-    }
-    if (preferredName) {
-        const id = getTypeIdentity(type, checker);
-        if (id) schemaRegistry.setPreferredName(id.key, preferredName);
-    }
+	// If response.of<T>(meta) has a { name: string } or { schemaName: string }, use it as preferred component name
+	let preferredName: string | undefined;
+	const callArgs = responseExpression.arguments;
+	if (callArgs.length > 0 && ts.isObjectLiteralExpression(callArgs[0])) {
+		for (const prop of callArgs[0].properties) {
+			if (!ts.isPropertyAssignment(prop)) continue;
+			const propName = getPropertyName(prop.name);
+			if (!propName) continue;
+			if (propName === "name" || propName === "schemaName") {
+				if (ts.isStringLiteral(prop.initializer)) {
+					preferredName = prop.initializer.text;
+					break;
+				}
+			}
+		}
+	}
+	if (preferredName) {
+		const id = getTypeIdentity(type, checker);
+		if (id) schemaRegistry.setPreferredName(id.key, preferredName);
+	}
 
 	// Convert TypeScript type to JSON Schema
-    return convertTypeToJsonSchema(type, checker);
+	return convertTypeToJsonSchema(type, checker);
 }
 
 // Function to extract JSDoc comments from a node
 function extractJSDocFromNode(node: ts.Node): {
-    summary?: string;
-    description?: string;
-    tags?: string[];
-    deprecated?: boolean;
-    operationId?: string;
-    externalDocs?: { url: string; description?: string };
-    example?: string;
+	summary?: string;
+	description?: string;
+	tags?: string[];
+	deprecated?: boolean;
+	operationId?: string;
+	externalDocs?: { url: string; description?: string };
+	example?: string;
 } {
-    const jsDocTags = ts.getJSDocTags(node);
-    const result: Record<string, Json> = {};
+	const jsDocTags = ts.getJSDocTags(node);
+	const result: Record<string, Json> = {};
 
 	for (const tag of jsDocTags) {
 		const tagName = tag.tagName.text;
@@ -912,35 +1021,37 @@ function extractJSDocFromNode(node: ts.Node): {
 		} else if (tagName === "example") {
 			result.example = comment;
 		} else if (tagName === "externalDocs") {
-            try {
-                const externalDocs = JSON.parse(comment);
-                if (
-                    externalDocs &&
-                    typeof externalDocs === "object" &&
-                    "url" in externalDocs
-                ) {
-                    (result as {
-                        externalDocs?: { url: string; description?: string };
-                    }).externalDocs = externalDocs as {
-                        url: string;
-                        description?: string;
-                    };
-                }
-            } catch {
-                // Ignore invalid JSON
-            }
-        }
-    }
+			try {
+				const externalDocs = JSON.parse(comment);
+				if (
+					externalDocs &&
+					typeof externalDocs === "object" &&
+					"url" in externalDocs
+				) {
+					(
+						result as {
+							externalDocs?: { url: string; description?: string };
+						}
+					).externalDocs = externalDocs as {
+						url: string;
+						description?: string;
+					};
+				}
+			} catch {
+				// Ignore invalid JSON
+			}
+		}
+	}
 
-    return result as {
-        summary?: string;
-        description?: string;
-        tags?: string[];
-        deprecated?: boolean;
-        operationId?: string;
-        externalDocs?: { url: string; description?: string };
-        example?: string;
-    };
+	return result as {
+		summary?: string;
+		description?: string;
+		tags?: string[];
+		deprecated?: boolean;
+		operationId?: string;
+		externalDocs?: { url: string; description?: string };
+		example?: string;
+	};
 }
 
 // Function to convert TypeScript type to JSON Schema with JSDoc support
@@ -960,87 +1071,98 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): Json {
 	}
 
 	// Handle object types
-    if (type.flags & ts.TypeFlags.Object) {
-
+	if (type.flags & ts.TypeFlags.Object) {
 		// Handle array types
-        if (type.symbol && type.symbol.name === "Array") {
-            // For array types, try to get the element type from type arguments
-            const typeArgs = (type as unknown as { typeArguments?: readonly ts.Type[] }).typeArguments;
-            if (typeArgs && typeArgs.length > 0) {
-                return {
-                    type: "array",
-                    items: convertTypeToJsonSchema(typeArgs[0], checker),
-                };
-            }
-            return {
-                type: "array",
-                items: {},
-            };
-        }
+		if (type.symbol && type.symbol.name === "Array") {
+			// For array types, try to get the element type from type arguments
+			const typeArgs = (
+				type as unknown as { typeArguments?: readonly ts.Type[] }
+			).typeArguments;
+			if (typeArgs && typeArgs.length > 0) {
+				return {
+					type: "array",
+					items: convertTypeToJsonSchema(typeArgs[0], checker),
+				};
+			}
+			return {
+				type: "array",
+				items: {},
+			};
+		}
 
 		// Handle interface/object types
-        const identity = getTypeIdentity(type, checker);
+		const identity = getTypeIdentity(type, checker);
 
-        // If type is named (interface/type alias), use components + $ref to avoid recursion
-        let componentName: string | null = null;
-        if (identity) {
-            if (schemaRegistry.has(identity.key)) {
-                const ref = schemaRegistry.getRefByKey(identity.key);
-                if (ref) return ref;
-            }
-            componentName = schemaRegistry.getOrRegister(identity.key, identity.name);
-        }
+		// If type is named (interface/type alias), use components + $ref to avoid recursion
+		let componentName: string | null = null;
+		if (identity) {
+			if (schemaRegistry.has(identity.key)) {
+				const ref = schemaRegistry.getRefByKey(identity.key);
+				if (ref) return ref;
+			}
+			componentName = schemaRegistry.getOrRegister(identity.key, identity.name);
+		}
 
-        const properties: Record<string, Json> = {};
-        const required: string[] = [];
+		const properties: Record<string, Json> = {};
+		const required: string[] = [];
 
-        // Prefer checker API to list structural properties (handles mapped types like Omit/Pick/Partial)
-        const propSymbols = checker.getPropertiesOfType(type);
-        for (const prop of propSymbols) {
-            const nameStr = prop.getName();
-            const decl = (prop.valueDeclaration ?? (prop.declarations && prop.declarations[0])) as
-                | ts.Declaration
-                | undefined;
-            const propType = checker.getTypeOfSymbolAtLocation(
-                prop,
-                (decl as ts.Node) ?? (identity?.name ? (type.symbol?.declarations?.[0] as ts.Node) : (prop as unknown as ts.Node)),
-            );
-            const propertySchema = convertTypeToJsonSchema(propType, checker);
+		// Prefer checker API to list structural properties (handles mapped types like Omit/Pick/Partial)
+		const propSymbols = checker.getPropertiesOfType(type);
+		for (const prop of propSymbols) {
+			const nameStr = prop.getName();
+			const decl = (prop.valueDeclaration ?? prop.declarations?.[0]) as
+				| ts.Declaration
+				| undefined;
+			const propType = checker.getTypeOfSymbolAtLocation(
+				prop,
+				(decl as ts.Node) ??
+					(identity?.name
+						? (type.symbol?.declarations?.[0] as ts.Node)
+						: (prop as unknown as ts.Node)),
+			);
+			const propertySchema = convertTypeToJsonSchema(propType, checker);
 
-            // Attach description from JSDoc when a declaration is available
-            if (decl) {
-                const jsDoc = extractJSDocFromNode(decl);
-                if (jsDoc.description && typeof propertySchema === "object" && propertySchema !== null) {
-                    (propertySchema as Record<string, unknown>).description = jsDoc.description;
-                }
-            }
+			// Attach description from JSDoc when a declaration is available
+			if (decl) {
+				const jsDoc = extractJSDocFromNode(decl);
+				if (
+					jsDoc.description &&
+					typeof propertySchema === "object" &&
+					propertySchema !== null
+				) {
+					(propertySchema as Record<string, unknown>).description =
+						jsDoc.description;
+				}
+			}
 
-            // Determine optionality: explicit optional flag or union including undefined
-            let isOptional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
-            if (!isOptional && (propType.flags & ts.TypeFlags.Union)) {
-                const union = propType as ts.UnionType;
-                isOptional = union.types.some((t) => (t.flags & ts.TypeFlags.Undefined) !== 0);
-            }
-            if (!isOptional) {
-                required.push(nameStr);
-            }
+			// Determine optionality: explicit optional flag or union including undefined
+			let isOptional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
+			if (!isOptional && propType.flags & ts.TypeFlags.Union) {
+				const union = propType as ts.UnionType;
+				isOptional = union.types.some(
+					(t) => (t.flags & ts.TypeFlags.Undefined) !== 0,
+				);
+			}
+			if (!isOptional) {
+				required.push(nameStr);
+			}
 
-            properties[nameStr] = propertySchema;
-        }
+			properties[nameStr] = propertySchema;
+		}
 
-        const objectSchema: Json = {
-            type: "object",
-            properties,
-            required: required.length > 0 ? required : undefined,
-        };
+		const objectSchema: Json = {
+			type: "object",
+			properties,
+			required: required.length > 0 ? required : undefined,
+		};
 
-        if (componentName) {
-            schemaRegistry.setSchema(componentName, objectSchema);
-            return { $ref: `#/components/schemas/${componentName}` };
-        }
+		if (componentName) {
+			schemaRegistry.setSchema(componentName, objectSchema);
+			return { $ref: `#/components/schemas/${componentName}` };
+		}
 
-        return objectSchema;
-    }
+		return objectSchema;
+	}
 
 	// Handle union types
 	if (type.flags & ts.TypeFlags.Union) {
@@ -1115,23 +1237,23 @@ function generateOpenAPI(projectPath: string, outputPath: string): void {
 		const sourceFiles = program.getSourceFiles();
 
 		// Simple OpenAPI spec
-        const openapiSpec: {
-            openapi: string;
-            info: { title: string; version: string; description: string };
-            paths: Record<string, OperationMap>;
-            components: { schemas: Record<string, unknown> };
-        } = {
-            openapi: "3.1.0",
-            info: {
-                title: "Simple Example API",
-                version: "1.0.0",
-                description: "Generated from TypeScript routes",
-            },
-            paths: {},
-            components: {
-                schemas: {},
-            },
-        };
+		const openapiSpec: {
+			openapi: string;
+			info: { title: string; version: string; description: string };
+			paths: Record<string, OperationMap>;
+			components: { schemas: Record<string, unknown> };
+		} = {
+			openapi: "3.1.0",
+			info: {
+				title: "Simple Example API",
+				version: "1.0.0",
+				description: "Generated from TypeScript routes",
+			},
+			paths: {},
+			components: {
+				schemas: {},
+			},
+		};
 
 		// Process source files
 		log.debug(`Found ${sourceFiles.length} source files`);

@@ -37,7 +37,10 @@ export function segmentToPath(seg: string): string | null {
  * @param absFileDir - Absolute path to the route file
  * @returns The resolved request path (e.g. `/users/:id`)
  */
-export function fsPathToRoutePath(absRoutesDir: string, absFileDir: string): string {
+export function fsPathToRoutePath(
+	absRoutesDir: string,
+	absFileDir: string,
+): string {
 	const rel = normalize(absFileDir).slice(normalize(absRoutesDir).length);
 	const raw = rel.split("/").filter(Boolean);
 	const urlSegs: string[] = [];
