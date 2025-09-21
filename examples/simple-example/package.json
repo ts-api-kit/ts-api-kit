@@ -2,6 +2,52 @@
   "name": "simple-example",
   "private": true,
   "type": "module",
+  "version": "1.0.0",
+  "displayName": "Simple Example",
+  "description": "Exemplo simples de uso do TS API Core com roteamento e validação.",
+  "openapi": {
+    "info": {
+      "termsOfService": "https://example.com/terms",
+      "contact": {
+        "name": "TS API Kit Team",
+        "url": "https://github.com/ts-api-kit/ts-api-kit",
+        "email": "contact@devzolo.com"
+      },
+      "license": {
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+      }
+    },
+    "tags": [
+      {
+        "name": "health",
+        "description": "Healthcheck e diagnósticos"
+      },
+      {
+        "name": "users",
+        "description": "Operações de usuário (exemplo)"
+      }
+    ],
+    "externalDocs": {
+      "url": "https://github.com/ts-api-kit/ts-api-kit",
+      "description": "Repositório e documentação do projeto"
+    },
+    "components": {
+      "securitySchemes": {
+        "bearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT"
+        }
+      }
+    },
+    "extensions": {
+      "x-logo": {
+        "url": "https://www.valuehost.com.br/blog/wp-content/uploads/2024/07/api.jpeg.webp",
+        "altText": "TS API Kit"
+      }
+    }
+  },
   "scripts": {
     "dev": "node --watch --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts",
     "dev:node": "node --watch --experimental-transform-types --no-warnings src/index.ts",
