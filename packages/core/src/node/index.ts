@@ -26,16 +26,33 @@ const exts = new Set([".ts", ".tsx", ".jsx"]);
 
 // Minimal types for Node ESM loader hooks to avoid `any`
 type LoaderResolveContext = {
-    conditions: string[];
-    importAssertions: Record<string, unknown>;
-    parentURL?: string;
+	conditions: string[];
+	importAssertions: Record<string, unknown>;
+	parentURL?: string;
 };
-type LoaderResolveResult = { url: string; format?: string; shortCircuit?: boolean };
-type NextResolve = (specifier: string, context: LoaderResolveContext) => Promise<LoaderResolveResult>;
+type LoaderResolveResult = {
+	url: string;
+	format?: string;
+	shortCircuit?: boolean;
+};
+type NextResolve = (
+	specifier: string,
+	context: LoaderResolveContext,
+) => Promise<LoaderResolveResult>;
 
-type LoaderLoadContext = { format?: string; importAssertions: Record<string, unknown> };
-type LoaderLoadResult = { format: string; source: string | ArrayBuffer | Uint8Array | null; shortCircuit?: boolean };
-type NextLoad = (url: string, context: LoaderLoadContext) => Promise<LoaderLoadResult>;
+type LoaderLoadContext = {
+	format?: string;
+	importAssertions: Record<string, unknown>;
+};
+type LoaderLoadResult = {
+	format: string;
+	source: string | ArrayBuffer | Uint8Array | null;
+	shortCircuit?: boolean;
+};
+type NextLoad = (
+	url: string,
+	context: LoaderLoadContext,
+) => Promise<LoaderLoadResult>;
 
 function transpileTS(source: string, filename: string) {
 	/** @type {import('typescript').TranspileOptions} */
@@ -100,7 +117,11 @@ export async function resolve(
 /**
  * Node ESM loader hook to transpile TS/TSX/JSX on-the-fly using TypeScript.
  */
-export async function load(url: string, context: LoaderLoadContext, next: NextLoad): Promise<LoaderLoadResult> {
+export async function load(
+	url: string,
+	context: LoaderLoadContext,
+	next: NextLoad,
+): Promise<LoaderLoadResult> {
 	if (!url.startsWith("file:")) return next(url, context);
 	const filename = fileURLToPath(url);
 	const ext = extname(filename);

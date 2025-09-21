@@ -47,7 +47,7 @@ export const GET = handle(
       },
     },
   },
-  ({ query }) => ({ message: `Hello ${query.name ?? "World"}!` }),
+  ({ query }) => ({ message: `Hello ${query.name ?? "World"}!` })
 );
 ```
 
@@ -91,7 +91,7 @@ export const POST = handle(
     const newItem: User = { id: crypto.randomUUID(), ...body } as User;
     items.push(newItem);
     return response.ok(newItem);
-  },
+  }
 );
 ```
 
@@ -132,7 +132,7 @@ export const PUT = handle(
   async ({ params, body, response }) => {
     // ... update user ...
     return response.ok({ message: `User ${params.id} updated` });
-  },
+  }
 );
 ```
 
@@ -228,4 +228,3 @@ v.object({ id: v.pipe(v.string(), v.transform(Number)) });
 ## License
 
 MIT
-

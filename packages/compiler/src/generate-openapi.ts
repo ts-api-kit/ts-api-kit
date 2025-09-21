@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
 import { createLogger, setLogLevel } from "@ts-api-kit/core/utils";
-import * as ts from "typescript";
+import ts from "typescript";
 import { createOpenAPIPlugin, type OpenAPIPluginOptions } from "./plugin.ts";
 
 interface CLIArgs {

@@ -1,29 +1,30 @@
 {
-  "targetDefaults": {
-    "build": {
-      "cache": true
-    },
-    "check": {
-      "cache": true
-    },
-    "lint": {
-      "cache": true
-    },
-    "lint:fix": {
-      "cache": true
-    },
-    "format": {
-      "cache": true
-    },
-    "format:fix": {
-      "cache": true
-    },
-    "test": {
-      "cache": true,
-      "exclude": ["frontend"]
-    }
-  },
-  "affected": {
-    "defaultBase": "main"
-  }
+	"useDaemon": false,
+	"targetDefaults": {
+		"build": {
+			"cache": true
+		},
+		"check": {
+			"cache": true
+		},
+		"lint": {
+			"cache": true
+		},
+		"lint:fix": {
+			"cache": true
+		},
+		"format": {
+			"cache": true
+		},
+		"format:fix": {
+			"cache": true
+		},
+		"test": {
+			"cache": true,
+			"exclude": ["frontend"]
+		}
+	},
+	"affected": {
+		"defaultBase": "main"
+	}
 }

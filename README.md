@@ -54,7 +54,7 @@ pnpm add -D openapi-to-remote
 
 ## Quick Start
 
-1) Minimal route
+1. Minimal route
 
 ```ts
 // src/routes/+route.ts
@@ -62,17 +62,16 @@ import { get, json } from "@ts-api-kit/core";
 import * as v from "valibot";
 
 export default {
-  GET: get(
-    { query: v.object({ name: v.optional(v.string()) }) },
-    ({ query }) => json({
+  GET: get({ query: v.object({ name: v.optional(v.string()) }) }, ({ query }) =>
+    json({
       message: `Hello ${query.name ?? "World"}!`,
       timestamp: new Date().toISOString(),
-    }),
+    })
   ),
 };
 ```
 
-2) Run the server
+1. Run the server
 
 ```bash
 # Using ts-api-kit loader
@@ -82,7 +81,7 @@ node --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings
 npm run dev
 ```
 
-3) Generate OpenAPI
+1. Generate OpenAPI
 
 ```bash
 npx @ts-api-kit/compiler generate-openapi
@@ -151,8 +150,7 @@ MIT — see [LICENSE](./LICENSE).
 
 ## Support
 
-- Issues: https://github.com/ts-api-kit/ts-api-kit/issues
-- Discussions: https://github.com/ts-api-kit/ts-api-kit/discussions
+- Issues: <https://github.com/ts-api-kit/ts-api-kit/issues>
+- Discussions: <https://github.com/ts-api-kit/ts-api-kit/discussions>
 
 — Built with ❤️ by [devzolo](https://github.com/devzolo) and contributors
-
