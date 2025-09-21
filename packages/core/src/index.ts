@@ -21,12 +21,28 @@ export { default as Server } from "./server.ts";
 
 import ApiServer from "@ts-api-kit/core/server";
 import { generateOpenAPI } from "./openapi/generator/index.ts";
-import { type RootOverrides, setRootOverrides } from "./openapi/overrides.ts";
+import { type RootOverrides, setOpenAPIGeneration, setRootOverrides } from "./openapi/overrides.ts";
 
 interface ServeOptions {
 	port?: number;
 	/** Root-level OpenAPI metadata applied to the final document. */
 	openapi?: RootOverrides;
+	/**
+	 * Control OpenAPI generation behavior at startup:
+	 * - 'file': generate an openapi.json on startup
+	 * - 'memory': no file; serve dynamic doc
+	 * - 'none': do not generate
+	 * Or provide an object to configure output path and mode.
+	 */
+	openapiOutput?:
+		| "file"
+		| "memory"
+		| "none"
+		| {
+			mode?: "file" | "memory" | "none";
+			path?: string; // only for mode 'file'
+			project?: string; // tsconfig path for typed generation (optional)
+		};
 }
 
 export const serve = async (options: ServeOptions = {}) => {
@@ -35,7 +51,21 @@ export const serve = async (options: ServeOptions = {}) => {
 	const server = new ApiServer();
 	// Store doc-level overrides for later merge when serving /openapi.json
 	setRootOverrides(options.openapi);
+
 	await server.configureRoutes(routesDir);
-	await generateOpenAPI(routesDir, "./openapi.json");
+
+	// Decide generation mode and file path
+	const outOpt = typeof options.openapiOutput === "string" ? { mode: options.openapiOutput } : (options.openapiOutput ?? { mode: "none" });
+	const mode = (outOpt.mode ?? "none") as "file" | "memory" | "none";
+const outPath = outOpt.path || "./openapi.json";
+setOpenAPIGeneration({ mode, path: outPath, project: outOpt.project || "./tsconfig.json" });
+	if (mode === "file") {
+		try {
+			const project = outOpt.project || "./tsconfig.json";
+			await generateOpenAPI(project, outPath);
+		} catch (err) {
+			console.error("OpenAPI file generation failed:", err);
+		}
+	}
 	server.start(port);
 };

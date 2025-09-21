@@ -45,4 +45,5 @@ serve({
       },
     },
   },
+  openapiOutput: "memory",
 });

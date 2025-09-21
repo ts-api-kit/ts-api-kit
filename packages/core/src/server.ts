@@ -23,7 +23,7 @@ import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
 import type { ResponseMarker } from "./openapi/markers.ts";
-import { getRootOverrides } from "./openapi/overrides.ts";
+import { getOpenAPIGeneration, getRootOverrides } from "./openapi/overrides.ts";
 import {
 	type AnySchema,
 	buildOpenAPIDocument,
@@ -1317,6 +1317,50 @@ export default class Server {
 
 				// Tenta carregar o arquivo openapi.json gerado estaticamente
 				const openapiPath = path.join(process.cwd(), "openapi.json");
+
+				const genCtl = getOpenAPIGeneration();
+				if (genCtl.mode === "memory") {
+					try {
+						const p = await import("node:path");
+						const os = await import("node:os");
+						const fs2 = await import("node:fs");
+						const { generateOpenAPI } = await import("./openapi/generator/index.ts");
+						const tmpFile = p.join(os.tmpdir(), `openapi.${Date.now()}.json`);
+						await generateOpenAPI(genCtl.project || "./tsconfig.json", tmpFile);
+						const doc = JSON.parse(fs2.readFileSync(tmpFile, "utf-8"));
+						try { fs2.unlinkSync(tmpFile); } catch {}
+						// Merge root overrides
+						try {
+							const o = getRootOverrides();
+							if (o) {
+								if (o.info) (doc as any).info = { ...(doc as any).info, ...o.info };
+								if (o.servers?.length) (doc as any).servers = o.servers;
+								if (o.tags?.length) (doc as any).tags = o.tags as any;
+								if (o.externalDocs) (doc as any).externalDocs = o.externalDocs;
+								if (o.components?.securitySchemes) {
+									(doc as any).components = (doc as any).components || {};
+									(doc as any).components.securitySchemes = {
+										...((doc as any).components?.securitySchemes || {}),
+										...o.components.securitySchemes,
+									};
+								}
+								if (o.extensions) {
+									for (const [k, v] of Object.entries(o.extensions)) {
+										if (k.startsWith("x-")) (doc as Record<string, unknown>)[k] = v as any;
+									}
+								}
+							}
+						} catch {}
+						return c.json(doc, {
+							headers: {
+								"Access-Control-Allow-Origin": "*",
+								"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+								"Access-Control-Allow-Headers": "Content-Type, Authorization",
+								"Content-Type": "application/json",
+							},
+						});
+					} catch {}
+				}
 
 				if (fs.existsSync(openapiPath)) {
 					const openapiContent = fs.readFileSync(openapiPath, "utf-8");
