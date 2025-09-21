@@ -5,36 +5,36 @@ import type { HttpMethod } from "../openapi/registry.ts";
  * Subset of OpenAPI operation fields collected from route JSDoc.
  */
 export type RouteJSDocOA = {
-    /** One-line summary for the operation. */
-    summary?: string;
-    /** Detailed description, supports multiline. */
-    description?: string;
-    /** Tags used to group operations in the UI. */
-    tags?: string[];
-    /** Security requirements for the operation. */
-    security?: Array<Record<string, string[]>>;
-    /** Marks the operation as deprecated. */
-    deprecated?: boolean;
-    /** Optional explicit operationId override. */
-    operationId?: string;
-    /** Link to external documentation for the operation. */
-    externalDocs?: { url: string; description?: string };
-    /**
-     * Optional overrides for path/method when not inferred from file structure.
-     * Prefer auto-inference; these are provided for edge cases.
-     */
-    path?: string;
-    method?: HttpMethod;
+	/** One-line summary for the operation. */
+	summary?: string;
+	/** Detailed description, supports multiline. */
+	description?: string;
+	/** Tags used to group operations in the UI. */
+	tags?: string[];
+	/** Security requirements for the operation. */
+	security?: Array<Record<string, string[]>>;
+	/** Marks the operation as deprecated. */
+	deprecated?: boolean;
+	/** Optional explicit operationId override. */
+	operationId?: string;
+	/** Link to external documentation for the operation. */
+	externalDocs?: { url: string; description?: string };
+	/**
+	 * Optional overrides for path/method when not inferred from file structure.
+	 * Prefer auto-inference; these are provided for edge cases.
+	 */
+	path?: string;
+	method?: HttpMethod;
 };
 
 /**
  * JSDoc information parsed for a single Valibot parameter entry.
  */
 export type ParameterJSDoc = {
-    /** Human-readable description for the parameter. */
-    description?: string;
-    /** Simple example value. */
-    example?: string;
+	/** Human-readable description for the parameter. */
+	description?: string;
+	/** Simple example value. */
+	example?: string;
 };
 
 /** Lê o bloco JSDoc que precede `export const|function <ExportName>` */
@@ -103,9 +103,9 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 					const v = JSON.parse(json);
 					if (Array.isArray(v)) out.security = v;
 					else out.security = [v];
-					} catch {
-						// ignore invalid JSON in @security
-					}
+				} catch {
+					// ignore invalid JSON in @security
+				}
 			} else {
 				out.security = [{}];
 			}
@@ -115,26 +115,26 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 			const rest = line.replace("@externalDocs", "").trim();
 			try {
 				const v = JSON.parse(rest);
-					if (v && typeof v === "object" && "url" in v) out.externalDocs = v;
-				} catch {
-					// ignore invalid JSON in @externalDocs
-				}
+				if (v && typeof v === "object" && "url" in v) out.externalDocs = v;
+			} catch {
+				// ignore invalid JSON in @externalDocs
+			}
 		} else if (line.startsWith("@path")) {
 			out.path = line.replace("@path", "").trim();
-	} else if (line.startsWith("@method")) {
-		const m = line.replace("@method", "").trim().toLowerCase();
-		if (
-			m === "get" ||
-			m === "post" ||
-			m === "put" ||
-			m === "patch" ||
-			m === "delete" ||
-			m === "options" ||
-			m === "head"
-		) {
-			out.method = m as HttpMethod;
+		} else if (line.startsWith("@method")) {
+			const m = line.replace("@method", "").trim().toLowerCase();
+			if (
+				m === "get" ||
+				m === "post" ||
+				m === "put" ||
+				m === "patch" ||
+				m === "delete" ||
+				m === "options" ||
+				m === "head"
+			) {
+				out.method = m as HttpMethod;
+			}
 		}
-	}
 	}
 
 	return out;

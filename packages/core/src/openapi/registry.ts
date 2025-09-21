@@ -1,9 +1,12 @@
 // Central registry for operations -> OpenAPI doc
 
 import { createLogger } from "../utils/logger.ts";
-import { OpenAPIBuilder, type OperationConfig, type RouteSchemas } from "./builder.ts";
-import { response } from "./index.ts";
-
+import {
+	OpenAPIBuilder,
+	type OperationConfig,
+	type RouteSchemas,
+} from "./builder.ts";
+import { type ResponseMarker, response } from "./index.ts";
 
 /**
  * The main OpenAPI builder instance for the application.
@@ -22,7 +25,7 @@ export const openapi: OpenAPIBuilder = new OpenAPIBuilder({
 // helper to register a route's operation
 /**
  * Registers an operation with the OpenAPI builder.
- * 
+ *
  * @param op - The operation configuration to register
  */
 export const register = (op: OperationConfig): void => {
@@ -37,7 +40,7 @@ export const register = (op: OperationConfig): void => {
 
 /**
  * Gets the current OpenAPI specification as JSON.
- * 
+ *
  * @returns The OpenAPI specification object
  */
 export const getOpenApiJson = (): ReturnType<OpenAPIBuilder["toJSON"]> =>
@@ -82,8 +85,8 @@ export type ResponseEntry = {
 /**
  * Map of HTTP status code -> response marker used for typing.
  */
-export type ResponsesMap = Record<number, response.Marker<AnySchema>> & {
-	default?: response.Marker<AnySchema>;
+export type ResponsesMap = Record<number, ResponseMarker<AnySchema>> & {
+	default?: ResponseMarker<AnySchema>;
 };
 /**
  * Metadata captured for each Hono route to drive OpenAPI generation.
@@ -130,7 +133,7 @@ function toOpenAPIPath(honoPath: string): string {
 
 /**
  * Builds an OpenAPI document with the specified options.
- * 
+ *
  * @param _opts - Configuration options for the OpenAPI document
  * @returns The generated OpenAPI document
  */
@@ -160,8 +163,8 @@ export function lazyRegister(
 		responses?: ResponsesMap;
 		summary?: string;
 		description?: string;
-        tags?: string[];
-        security?: Array<Record<string, string[]>>;
+		tags?: string[];
+		security?: Array<Record<string, string[]>>;
 		deprecated?: boolean;
 		operationId?: string;
 		externalDocs?: { url: string; description?: string };
@@ -172,7 +175,7 @@ export function lazyRegister(
 	const openapiPath = toOpenAPIPath(path);
 
 	// Register with the OpenAPI builder
-    register({
+	register({
 		method,
 		path: openapiPath,
 		summary: partial.summary || `${method.toUpperCase()} ${openapiPath}`,

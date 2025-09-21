@@ -10,21 +10,13 @@ interface User {
 
 interface HelloWorldResponse {
 	user: User;
-	email: string;
 }
 
-type Test = Omit<HelloWorldResponse, "email">;
-
-/**
- * @summary Get user
- * @description Get a user by id
- * @tags users
- */
 export const GET = handle(
 	{
 		openapi: {
 			responses: {
-				200: response.of<Test>(),
+				200: response.of<HelloWorldResponse>(),
 			},
 		},
 	},

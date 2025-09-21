@@ -200,10 +200,10 @@ async function watchAndGenerate(
 }
 
 type SetupProjectOptions = {
-    project: string;
-    output: string;
-    title: string;
-    version: string;
+	project: string;
+	output: string;
+	title: string;
+	version: string;
 };
 
 // Função para configurar projeto
@@ -222,11 +222,11 @@ function setupProject(options: SetupProjectOptions) {
 		tsconfigContent.compilerOptions.plugins = [];
 	}
 
-    const pluginExists = tsconfigContent.compilerOptions.plugins.some(
-        (plugin: { transform?: string }) =>
-            typeof plugin.transform === "string" &&
-            plugin.transform.includes("ts-plugin-simple.ts"),
-    );
+	const pluginExists = tsconfigContent.compilerOptions.plugins.some(
+		(plugin: { transform?: string }) =>
+			typeof plugin.transform === "string" &&
+			plugin.transform.includes("ts-plugin-simple.ts"),
+	);
 
 	if (!pluginExists) {
 		tsconfigContent.compilerOptions.plugins.push({
