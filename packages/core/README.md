@@ -178,6 +178,99 @@ You can enrich operations with JSDoc above your exports:
 export const GET = handle(/* ... */);
 ```
 
+### Root OpenAPI (app-level)
+
+You can provide document-level OpenAPI metadata at server startup via `serve({ openapi })`.
+
+```ts
+import { serve } from "@ts-api-kit/core";
+
+serve({
+  openapi: {
+    info: {
+      title: "My API",
+      version: "1.0.0",
+      description: "Awesome API",
+      termsOfService: "https://example.com/terms",
+      contact: { name: "Team", url: "https://example.com", email: "team@example.com" },
+      license: { name: "MIT", url: "https://opensource.org/licenses/MIT" },
+    },
+    servers: [
+      { url: "{{server.origin}}", description: "Default" },
+    ],
+    tags: [{ name: "users", description: "User operations" }],
+    externalDocs: { url: "https://example.com/docs", description: "Docs" },
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
+    },
+    extensions: { "x-logo": { url: "https://example.com/logo.png", altText: "Logo" } },
+  },
+});
+```
+
+If you omit `info` and `servers`, sane defaults are applied from `package.json` and the request URL:
+
+- `info.title` ← `package.json.displayName` or `package.json.name` or `"API"`
+- `info.version` ← `package.json.version` or `"1.0.0"`
+- `info.description` ← `package.json.description` or `""`
+- `servers` ← `[{ url: <request origin>, description: "Default" }]`
+
+You can also put an `openapi` object in `package.json`. The core will load it as defaults and then apply `serve({ openapi })` as overrides:
+
+```json
+{
+  "name": "my-app",
+  "version": "1.2.3",
+  "displayName": "My App",
+  "description": "My API",
+  "openapi": {
+    "info": { "title": "My App", "version": "2.0.0", "description": "Custom" },
+    "tags": [{ "name": "health", "description": "Health check" }]
+  }
+}
+```
+
+#### Placeholders (safe)
+
+The core interpolates placeholders in a few fields (supports both `{{key}}` and legacy `${key}`):
+
+- Server URL (`servers[].url`): `{{server.origin}}`, `{{server.protocol}}`, `{{server.host}}`, `{{server.port}}`
+- Package fields: `{{pkg.displayName}}`, `{{pkg.name}}`, `{{pkg.version}}`, `{{pkg.description}}`
+- Info: applied to `info.title`, `info.version`, `info.description`
+- External docs: applied to `externalDocs.url`
+
+Example:
+
+```ts
+serve({
+  openapi: {
+    info: {
+      title: "{{pkg.displayName}}",
+      version: "{{pkg.version}}",
+      description: "{{pkg.description}}",
+    },
+    servers: [{ url: "{{server.origin}}", description: "Default" }],
+  },
+});
+```
+
+### Generation modes
+
+Control how the OpenAPI document is produced via `openapiOutput` (defaults to `"memory"`):
+
+- `"memory"` (default): typed generation in memory (no file) for `/openapi.json`.
+- `"file"`: generate a static `openapi.json` at startup (optionally configure `path` and `project`).
+- `"none"`: do not generate; fallback to the dynamic builder (no TypeScript AST), still merges root overrides.
+
+```ts
+serve({
+  openapi,
+  openapiOutput: "file", // or { mode: "file", path: "./openapi.json", project: "./tsconfig.json" }
+});
+```
+
 ## Validation & Types
 
 - Define `query`, `params`, `headers`, and `body` with Valibot.
