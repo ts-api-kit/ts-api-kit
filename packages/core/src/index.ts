@@ -19,7 +19,7 @@ export * from "./openapi/registry.ts";
 export * from "./server.ts";
 export { default as Server } from "./server.ts";
 
-import ApiServer from "@ts-api-kit/core/server";
+import ApiServer from "./server.ts";
 import { generateOpenAPI } from "./openapi/generator/index.ts";
 import {
 	type RootOverrides,
