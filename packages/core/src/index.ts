@@ -12,6 +12,8 @@
 
 export * from "./file-router.ts";
 export { mountFileRouter } from "./file-router.ts";
+export * from "./hooks.ts";
+export * from "./middleware.ts";
 export * from "./openapi/builder.ts";
 export * from "./openapi/markers.ts";
 export * from "./openapi/presets.ts";

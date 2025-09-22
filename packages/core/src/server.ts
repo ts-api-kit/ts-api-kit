@@ -22,6 +22,7 @@ import { requestId } from "hono/request-id";
 import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 import { mountFileRouter } from "./file-router.ts";
+import { resolveErrorForPath, resolveNotFoundForPath } from "./hooks.ts";
 import type { OpenAPIBuilder } from "./openapi/builder.ts";
 import type { ResponseMarker } from "./openapi/markers.ts";
 import {
@@ -1059,6 +1060,13 @@ export function createHandler<T extends RouteSpec>(
 			}
 			return createJsonResponse(body, status);
 		} catch (err) {
+			// Allow scoped error handlers defined via +error.ts to render the error
+			try {
+				const scoped = resolveErrorForPath(c.req.path);
+				if (scoped) return await scoped(err, c);
+			} catch {
+				// ignore and fall through to default handling
+			}
 			if (err instanceof AppError) {
 				return createJsonResponse(
 					{
@@ -1749,8 +1757,22 @@ export default class Server {
 			>[0]) as unknown as MiddlewareHandler,
 		);
 
-		this.app.notFound((c) => c.json({ error: "Not Found" }, 404));
-		this.app.onError((err, c) => {
+		this.app.notFound(async (c) => {
+			try {
+				const h = resolveNotFoundForPath(c.req.path);
+				if (h) return await h(c);
+			} catch (e) {
+				this.log.error("notFound handler error:", e);
+			}
+			return c.json({ error: "Not Found" }, 404);
+		});
+		this.app.onError(async (err, c) => {
+			try {
+				const h = resolveErrorForPath(c.req.path);
+				if (h) return await h(err, c);
+			} catch (e) {
+				this.log.error("onError handler error:", e);
+			}
 			this.log.error(err);
 			return c.json({ error: "Internal Server Error" }, 500);
 		});

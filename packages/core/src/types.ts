@@ -1,4 +1,4 @@
-import type { Handler, MiddlewareHandler } from "hono";
+import type { Context, Handler, MiddlewareHandler } from "hono";
 /**
  * Defines the structure of a route module file.
  * Contains HTTP method handlers and optional default handler.
@@ -30,3 +30,22 @@ export interface MountResult {
 	routes: number;
 	middlewares: number;
 }
+
+/** Module shape for +error.ts */
+export type ErrorHandlerFn = (
+	err: unknown,
+	c: Context,
+) => Response | Promise<Response>;
+export type ErrorModule = {
+	onError?: ErrorHandlerFn;
+	ERROR?: ErrorHandlerFn;
+	default?: ErrorHandlerFn;
+};
+
+/** Module shape for +not-found.ts */
+export type NotFoundHandlerFn = (c: Context) => Response | Promise<Response>;
+export type NotFoundModule = {
+	notFound?: NotFoundHandlerFn;
+	NOT_FOUND?: NotFoundHandlerFn;
+	default?: NotFoundHandlerFn;
+};

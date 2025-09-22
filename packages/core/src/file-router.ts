@@ -2,13 +2,15 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
 import type { Handler, Hono, MiddlewareHandler } from "hono";
-import { dirname, resolve } from "pathe";
+import { dirname, join, resolve } from "pathe";
+import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
 import { setCurrentFilePath } from "./server.ts";
 import type {
-	MiddlewareModule,
+	ErrorModule,
 	MountResult,
+	NotFoundModule,
 	RouteModule,
 	RouteModuleExport,
 } from "./types.ts";
@@ -17,6 +19,20 @@ import { createLogger } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
+
+function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
+  for (const n of names) {
+    const v = mod?.[n];
+    if (typeof v === "function") return v;
+    if (n === "default" && v && typeof v === "object") {
+      for (const alt of ["notFound", "NOT_FOUND", "onError", "ERROR"]) {
+        const inner = (v as Record<string, unknown>)[alt];
+        if (typeof inner === "function") return inner;
+      }
+    }
+  }
+  return undefined;
+}
 
 /**
  * Builds a module specifier for dynamic import that works at runtime without
@@ -94,6 +110,18 @@ const DEFAULT_MW_GLOBS = [
 	"**/+middleware.js",
 	"**/+middleware.jsx",
 ];
+const DEFAULT_ERROR_GLOBS = [
+	"**/+error.ts",
+	"**/+error.tsx",
+	"**/+error.js",
+	"**/+error.jsx",
+];
+const DEFAULT_NOTFOUND_GLOBS = [
+	"**/+not-found.ts",
+	"**/+not-found.tsx",
+	"**/+not-found.js",
+	"**/+not-found.jsx",
+];
 function sortByDepthDesc(paths: string[]) {
 	return [...paths].sort((a, b) => b.split("/").length - a.split("/").length);
 }
@@ -150,14 +178,96 @@ export async function mountFileRouter(
 	for (const file of sortByDepthAsc(mwFiles)) {
 		const dir = dirname(file);
 		const modUrl = toModuleUrl(file);
-		const mod = await safeDynamicImport<Partial<MiddlewareModule>>(modUrl);
-		const list = toArray(
-			mod.middleware as MiddlewareHandler | MiddlewareHandler[],
-		);
+		const mod = await safeDynamicImport<unknown>(modUrl);
+		const candidates: unknown[] = [
+			(mod as Record<string, unknown>)?.middleware,
+			// alternative, more symmetrical names
+			(mod as Record<string, unknown>)?.USE,
+			(mod as Record<string, unknown>)?.MIDDLEWARE,
+			// allow default export
+			(mod as Record<string, unknown>)?.default,
+		];
+
+		let list: MiddlewareHandler[] = [];
+		for (const cand of candidates) {
+			const arr = toArray(
+				cand as MiddlewareHandler | MiddlewareHandler[],
+			).filter(
+				Boolean as unknown as <T>(v: T) => v is T,
+			) as MiddlewareHandler[];
+			if (arr.length) {
+				list = arr;
+				break;
+			}
+		}
+
 		if (!list.length) continue;
-		const arr = mwsByDir.get(dir) ?? [];
-		arr.push(...list);
-		mwsByDir.set(dir, arr);
+		const acc = mwsByDir.get(dir) ?? [];
+		acc.push(...list);
+		mwsByDir.set(dir, acc);
+	}
+
+	// Discover +error.ts files and register scoped error handlers
+	const errFiles = await fg(DEFAULT_ERROR_GLOBS, {
+		cwd: routesDir,
+		absolute: true,
+		dot: false,
+	});
+	log.debug("Found error files:", errFiles);
+	for (const file of sortByDepthAsc(errFiles)) {
+    const dir = dirname(file);
+    // Derive the base path for the directory by pretending there's a +route.ts
+    // directly under it. Using "+route.ts" (not "index/+route.ts") ensures
+    // the root directory maps to "/" instead of "/index".
+    const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+		const modUrl = toModuleUrl(file);
+		const mod = (await safeDynamicImport<Partial<ErrorModule>>(modUrl)) || {};
+		const handler = pickFunc(mod as Record<string, unknown>, [
+			"onError",
+			"ERROR",
+			"default",
+		]);
+		if (typeof handler === "function") {
+			registerScopedError(
+				hono,
+				handler as unknown as Parameters<typeof registerScopedError>[1],
+			);
+		}
+	}
+
+	// Discover +not-found.ts files and register scoped not-found handlers
+	const nfFiles = await fg(DEFAULT_NOTFOUND_GLOBS, {
+		cwd: routesDir,
+		absolute: true,
+		dot: false,
+	});
+	log.debug("Found not-found files:", nfFiles);
+	const localNotFounds: Array<{
+		base: string;
+		handler: (c: Parameters<Handler>[0]) => ReturnType<Handler>;
+	}> = [];
+	for (const file of sortByDepthAsc(nfFiles)) {
+    const dir = dirname(file);
+    // See note above: use "+route.ts" to correctly map root to "/".
+    const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+		const modUrl = toModuleUrl(file);
+		const mod =
+			(await safeDynamicImport<Partial<NotFoundModule>>(modUrl)) || {};
+		const handler = pickFunc(mod as Record<string, unknown>, [
+			"notFound",
+			"NOT_FOUND",
+			"default",
+		]);
+		if (typeof handler === "function") {
+			registerScopedNotFound(
+				hono,
+				handler as unknown as Parameters<typeof registerScopedNotFound>[1],
+			);
+			localNotFounds.push({
+				base: hono,
+				handler: handler as (c: Parameters<Handler>[0]) => ReturnType<Handler>,
+			});
+		}
 	}
 
 	// Helper: collect middleware chain from routes root down to file's directory
@@ -167,7 +277,7 @@ export async function mountFileRouter(
 		let cur = dirname(file);
 		while (cur.startsWith(routesDir)) {
 			const m = mwsByDir.get(cur);
-			if (m && m.length) stack.push(m);
+			if (m?.length) stack.push(m);
 			if (cur === routesDir) break;
 			const parent = dirname(cur);
 			if (parent === cur) break;
@@ -286,6 +396,17 @@ export async function mountFileRouter(
 
 			routesMounted++;
 		}
+	}
+
+	// Register local catch-all routes for each not-found scope (deeper first)
+	const depth = (p: string) => p.split("/").filter(Boolean).length;
+	for (const { base, handler } of [...localNotFounds].sort(
+		(a, b) => depth(b.base) - depth(a.base),
+	)) {
+		const basePath = base === "/" ? "/" : base;
+		const starPath = base === "/" ? "/:__rest{.*}" : `${base}/:__rest{.*}`;
+		app.all(basePath, handler as unknown as Handler);
+		app.all(starPath, handler as unknown as Handler);
 	}
 	const result = { routes: routesMounted, middlewares: mwsByDir.size };
 	if (routesMounted || mwsByDir.size) {
