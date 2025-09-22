@@ -64,9 +64,10 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install changesets CLI
-        run: pnpm add -D @changesets/cli
-
+      # Changesets CLI is already a devDependency at the repo root.
+      # No need to add it during CI; this job only checks for presence of changeset files.
+      # - name: Install changesets CLI
+      #   run: pnpm add -D @changesets/cli
       - name: Fail if packages changed but no changeset provided
         shell: bash
         run: |
