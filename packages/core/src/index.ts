@@ -19,7 +19,6 @@ export * from "./openapi/registry.ts";
 export * from "./server.ts";
 export { default as Server } from "./server.ts";
 
-import ApiServer from "./server.ts";
 import { generateOpenAPI } from "./openapi/generator/index.ts";
 import {
 	type RootOverrides,
@@ -27,6 +26,7 @@ import {
 	setOpenAPIGeneration,
 	setRootOverrides,
 } from "./openapi/overrides.ts";
+import ApiServer from "./server.ts";
 
 interface ServeOptions {
 	port?: number;
