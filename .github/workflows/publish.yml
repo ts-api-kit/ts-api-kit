@@ -1,44 +1,34 @@
-name: Publish to JSR
+name: Release Verify (Dry Run)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/**"
-      - ".github/workflows/publish.yml"
   workflow_dispatch:
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
+          cache: pnpm
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build packages
-        run: pnpm build
-
-      - name: Publish @ts-api-kit/core
-        run: |
-          cd packages/core
-          npx jsr publish --allow-dirty
-
-      - name: Publish @ts-api-kit/compiler
-        run: |
-          cd packages/compiler
-          npx jsr publish --allow-dirty
+      - name: Dry-run end-to-end release verification
+        run: pnpm release:verify
