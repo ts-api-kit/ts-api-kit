@@ -296,6 +296,8 @@ type OpenAPIDocument = {
 	paths: PathsObject;
 	components: ComponentsObject;
 	tags: { name: string; description?: string }[];
+	// Allow root-level externalDocs (valid in OpenAPI 3.1)
+	externalDocs?: { url: string; description?: string };
 };
 
 export class OpenAPIBuilder {
