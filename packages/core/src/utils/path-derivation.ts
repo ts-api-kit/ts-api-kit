@@ -24,11 +24,12 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 	const idx = p.lastIndexOf(anchor);
 	if (idx >= 0) p = p.slice(idx + anchor.length);
 
-	// remove file suffix (+route.ts, route.ts, ...)
-	p = p.replace(FILE_RE, "");
+    // remove file suffix (+route.ts, route.ts, ...)
+    p = p.replace(FILE_RE, "");
 
-	// remove /index at the end
-	p = p.replace(/\/index$/, "");
+    // normalise trailing slash then remove optional trailing /index
+    if (p.endsWith("/")) p = p.slice(0, -1);
+    p = p.replace(/\/index$/, "");
 
 	// base path
 	if (p === "" || p === "/") return { hono: "/", openapi: "/" };

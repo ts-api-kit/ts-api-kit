@@ -159,6 +159,24 @@ export async function mountFileRouter(
 		arr.push(...list);
 		mwsByDir.set(dir, arr);
 	}
+
+	// Helper: collect middleware chain from routes root down to file's directory
+	const collectMiddlewareFor = (file: string): MiddlewareHandler[] => {
+		const chain: MiddlewareHandler[] = [];
+		const stack: MiddlewareHandler[][] = [];
+		let cur = dirname(file);
+		while (cur.startsWith(routesDir)) {
+			const m = mwsByDir.get(cur);
+			if (m && m.length) stack.push(m);
+			if (cur === routesDir) break;
+			const parent = dirname(cur);
+			if (parent === cur) break;
+			cur = parent;
+		}
+		// ensure root-most first
+		for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
+		return chain;
+	};
 	let routesMounted = 0;
 	for (const file of sortByDepthDesc(routeFiles)) {
 		const modUrl = toModuleUrl(file);
@@ -231,14 +249,23 @@ export async function mountFileRouter(
 			// Prefer the direct method when available, otherwise fall back to app.on().
 			const direct = (app as unknown as Record<string, unknown>)[method];
 			if (typeof direct === "function") {
+				const chain = collectMiddlewareFor(file);
 				// @ts-expect-error dynamic method indexing
-				app[method](hono, handler);
+				app[method](hono, ...chain, handler);
 			} else {
 				// Use generic registrar as a robust fallback
 				// Hono expects the HTTP verb in uppercase for app.on()
+				const chain = collectMiddlewareFor(file);
 				(
-					app as unknown as { on: (m: string, p: string, h: Handler) => void }
-				).on(method.toUpperCase(), hono, handler as unknown as Handler);
+					app as unknown as {
+						on: (m: string, p: string, ...h: Handler[]) => void;
+					}
+				).on(
+					method.toUpperCase(),
+					hono,
+					...(chain as unknown as Handler[]),
+					handler as unknown as Handler,
+				);
 			}
 
 			// Register OpenAPI metadata
