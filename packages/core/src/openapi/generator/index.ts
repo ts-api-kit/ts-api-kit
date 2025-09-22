@@ -1204,7 +1204,10 @@ function convertTypeToJsonSchema(type: ts.Type, checker: ts.TypeChecker): Json {
  * @param projectPath - Path to the tsconfig file to analyse
  * @param outputPath - Destination for the generated OpenAPI JSON file
  */
-export async function generateOpenAPI(projectPath: string, outputPath: string): Promise<void> {
+export async function generateOpenAPI(
+	projectPath: string,
+	outputPath: string,
+): Promise<void> {
 	log.debug(`Loading TypeScript project from: ${projectPath}`);
 	log.debug(`Output will be written to: ${outputPath}`);
 
