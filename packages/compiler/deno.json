@@ -1,5 +1,8 @@
 {
   "$schema": "https://deno.land/x/deno@2.0.0/cli/schemas/config-file.v1.json",
+  "name": "@ts-api-kit/compiler",
+  "version": "0.1.8",
+  "exports": "./src/index.ts",
   "imports": {
     "@hono/node-server": "npm:@hono/node-server@^1.11.3",
     "@scalar/hono-api-reference": "npm:@scalar/hono-api-reference@^0.9.16",
