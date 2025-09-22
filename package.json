@@ -26,11 +26,11 @@
 		"sync:jsr-versions": "node scripts/sync-jsr-versions.mjs",
 		"release:publish": "pnpm publish:jsr",
 		"release:verify": "pnpm build && pnpm test && pnpm lint && node scripts/sync-jsr-versions.mjs --check && pnpm release:dry-run",
-		"release:dry-run": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec jsr publish --dry-run --allow-slow-types",
+		"release:dry-run": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec pnpm dlx jsr publish --dry-run --allow-dirty --allow-slow-types",
 		"release": "pnpm release:version && pnpm -r install --no-frozen-lockfile && pnpm release:publish",
-		"publish:jsr": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec jsr publish --allow-slow-types",
-		"publish:core": "cd packages/core && npx jsr publish --allow-slow-types",
-		"publish:compiler": "cd packages/compiler && npx jsr publish --allow-slow-types"
+		"publish:jsr": "pnpm build && pnpm -r --filter=\"@ts-api-kit/*\" exec pnpm dlx jsr publish --allow-slow-types",
+		"publish:core": "pnpm -r --filter=\"@ts-api-kit/core\" exec pnpm dlx jsr publish --allow-slow-types",
+		"publish:compiler": "pnpm -r --filter=\"@ts-api-kit/compiler\" exec pnpm dlx jsr publish --allow-slow-types"
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.27.8",

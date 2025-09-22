@@ -54,10 +54,12 @@ for (const base of globs) {
   const pkgJsonPath = join(ROOT, base, 'package.json');
   if (!existsSync(pkgJsonPath)) continue;
   const jsrJsonPath = join(ROOT, base, 'jsr.json');
+  const denoJsonPath = join(ROOT, base, 'deno.json');
   if (!existsSync(jsrJsonPath)) continue;
 
   const pkg = readJson(pkgJsonPath);
   const jsr = readJson(jsrJsonPath);
+  const deno = existsSync(denoJsonPath) ? readJson(denoJsonPath) : null;
 
   const prev = jsr.version;
   const next = pkg.version;
@@ -65,6 +67,11 @@ for (const base of globs) {
 
   if (prev !== next) {
     if (!checkOnly) jsr.version = next;
+    changed = true;
+  }
+
+  if (deno && deno.version !== next) {
+    if (!checkOnly) deno.version = next;
     changed = true;
   }
 
@@ -76,7 +83,10 @@ for (const base of globs) {
   );
   if (internalChanged) changed = true;
 
-  if (!checkOnly) writeJson(jsrJsonPath, jsr);
+  if (!checkOnly) {
+    writeJson(jsrJsonPath, jsr);
+    if (deno) writeJson(denoJsonPath, deno);
+  }
 }
 
 if (checkOnly) {
