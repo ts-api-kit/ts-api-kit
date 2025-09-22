@@ -1,12 +1,4 @@
-import console from "node:console";
-import type { Context, MiddlewareHandler } from "hono";
+import { use } from "@ts-api-kit/core";
+import { logger } from "hono/logger";
 
-export const middleware: MiddlewareHandler = async (c: Context, next) => {
-	const start = Date.now();
-	await next();
-	const duration = Date.now() - start;
-	const { method } = c.req;
-	const url = new URL(c.req.url);
-	const status = c.res?.status ?? 0;
-	console.log(`${method} ${url.pathname} -> ${status} (${duration}ms)`);
-};
+export default use(logger());

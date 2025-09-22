@@ -28,13 +28,14 @@ export const GET = handle(
 			},
 		},
 	},
-	({ response }) =>
-		response.ok({
+	({ response }) => {
+		return response.ok({
 			user: {
 				id: 1,
 				name: "John Doe",
 				email: "john.doe@example.com",
 				parent: { id: 2, name: "Jane Doe", email: "jane.doe@example.com" },
 			},
-		}),
+		});
+  }
 );
