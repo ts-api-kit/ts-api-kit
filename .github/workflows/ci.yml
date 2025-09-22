@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify jsr.json versions are in sync
+        run: node scripts/sync-jsr-versions.mjs --check
+
+  changeset:
+    name: Ensure changeset present when packages change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+
+      - name: Install changesets CLI
+        run: pnpm add -D @changesets/cli
+
+      - name: Fail if packages changed but no changeset provided
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=${{ github.base_ref || 'origin/main' }}
+          git fetch --depth=1 origin main || true
+          CHANGED=$(git diff --name-only "${BASE}"... | grep '^packages/' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No package changes detected; skipping changeset check."
+            exit 0
+          fi
+          echo "Package changes detected:" && echo "$CHANGED"
+          # List changesets introduced in this branch
+          CS=$(git diff --name-only "${BASE}"... | grep '^\.changeset/.*\.md$' || true)
+          if [ -z "$CS" ]; then
+            echo "ERROR: Package changes without a corresponding changeset (.changeset/*.md)."
+            echo "Run: pnpm changeset and commit the generated file."
+            exit 1
+          fi
+          echo "Found changesets:"
+          echo "$CS"
+
