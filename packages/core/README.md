@@ -298,6 +298,15 @@ server.start(3000);
 - `error(code, message, meta?)` to throw a typed `AppError`.
 - `getRequestEvent()` to access cookies/headers outside the Hono context.
 
+## Logging
+
+- Mount logs show routes, middleware, and special handlers at `info` level.
+- Control verbosity via env var `TS_API_KIT_LOG_LEVEL` or `DEBUG`:
+  - Levels: `silent | error | warn | info | debug` (default: `info`).
+  - Example: `TS_API_KIT_LOG_LEVEL=debug` or `DEBUG=ts-api-kit`.
+- Programmatic control: `import { setLogLevel } from "@ts-api-kit/core/utils"; setLogLevel("silent")`.
+- The file router also accepts per-call options: `mountFileRouter(app, { routesDir, logLevel: "debug" })` or `{ silent: true }`.
+
 ## Schema Examples (Valibot)
 
 ```ts

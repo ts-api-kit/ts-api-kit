@@ -2,7 +2,7 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
 import type { Handler, Hono, MiddlewareHandler } from "hono";
-import { dirname, join, resolve } from "pathe";
+import { dirname, join, relative as relPath, resolve } from "pathe";
 import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
@@ -15,23 +15,23 @@ import type {
 	RouteModuleExport,
 } from "./types.ts";
 import { readRouteJSDocForExport } from "./utils/jsdoc-extractor.ts";
-import { createLogger } from "./utils/logger.ts";
+import { createLogger, type Logger, setLogLevel } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
 
 function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
-  for (const n of names) {
-    const v = mod?.[n];
-    if (typeof v === "function") return v;
-    if (n === "default" && v && typeof v === "object") {
-      for (const alt of ["notFound", "NOT_FOUND", "onError", "ERROR"]) {
-        const inner = (v as Record<string, unknown>)[alt];
-        if (typeof inner === "function") return inner;
-      }
-    }
-  }
-  return undefined;
+	for (const n of names) {
+		const v = mod?.[n];
+		if (typeof v === "function") return v;
+		if (n === "default" && v && typeof v === "object") {
+			for (const alt of ["notFound", "NOT_FOUND", "onError", "ERROR"]) {
+				const inner = (v as Record<string, unknown>)[alt];
+				if (typeof inner === "function") return inner;
+			}
+		}
+	}
+	return undefined;
 }
 
 /**
@@ -81,6 +81,15 @@ export interface FileRouterOptions {
 	 * Optional base path where routes are mounted (e.g. `/api`).
 	 */
 	basePath?: string;
+	/**
+	 * Controls logging for the mounting process.
+	 *
+	 * - Set `logLevel` to one of: `debug | info | warn | error | silent`
+	 *   to override the global logger level during mount.
+	 * - Or set `silent: true` to suppress mount logs (alias for `logLevel: 'silent'`).
+	 */
+	logLevel?: "debug" | "info" | "warn" | "error" | "silent";
+	silent?: boolean;
 }
 
 // HTTP method exports that we can infer from
@@ -143,8 +152,16 @@ export async function mountFileRouter(
 	app: Hono,
 	opts: FileRouterOptions,
 ): Promise<MountResult> {
-	const log = createLogger("core:file-router");
+	// Optional per-call logging control
+	if (opts.silent) setLogLevel("silent");
+	if (opts.logLevel) setLogLevel(opts.logLevel);
+
+	const baseLog = createLogger("core:file-router");
+	const log: Logger = opts.silent
+		? { debug() {}, info() {}, warn() {}, error() {} }
+		: baseLog;
 	const routesDir = resolve(opts.routesDir);
+	const relp = (p: string) => relPath(routesDir, p);
 	const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
 	const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
 
@@ -174,6 +191,8 @@ export async function mountFileRouter(
 	});
 
 	log.debug("Found middleware files:", mwFiles);
+	const rel = (p: string) =>
+		p.replace(`${routesDir}\\`, "/").replace(`${routesDir}/`, "");
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
 	for (const file of sortByDepthAsc(mwFiles)) {
 		const dir = dirname(file);
@@ -205,6 +224,14 @@ export async function mountFileRouter(
 		const acc = mwsByDir.get(dir) ?? [];
 		acc.push(...list);
 		mwsByDir.set(dir, acc);
+
+		// Log middleware discovery with its effective base path
+		try {
+			const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+			log.info(`middleware ${hono} <- ${relp(file)} (${list.length})`);
+		} catch {
+			// best-effort logging only
+		}
 	}
 
 	// Discover +error.ts files and register scoped error handlers
@@ -215,11 +242,11 @@ export async function mountFileRouter(
 	});
 	log.debug("Found error files:", errFiles);
 	for (const file of sortByDepthAsc(errFiles)) {
-    const dir = dirname(file);
-    // Derive the base path for the directory by pretending there's a +route.ts
-    // directly under it. Using "+route.ts" (not "index/+route.ts") ensures
-    // the root directory maps to "/" instead of "/index".
-    const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+		const dir = dirname(file);
+		// Derive the base path for the directory by pretending there's a +route.ts
+		// directly under it. Using "+route.ts" (not "index/+route.ts") ensures
+		// the root directory maps to "/" instead of "/index".
+		const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
 		const modUrl = toModuleUrl(file);
 		const mod = (await safeDynamicImport<Partial<ErrorModule>>(modUrl)) || {};
 		const handler = pickFunc(mod as Record<string, unknown>, [
@@ -232,6 +259,7 @@ export async function mountFileRouter(
 				hono,
 				handler as unknown as Parameters<typeof registerScopedError>[1],
 			);
+			log.info(`error-handler ${hono}/* <- ${relp(file)}`);
 		}
 	}
 
@@ -247,9 +275,9 @@ export async function mountFileRouter(
 		handler: (c: Parameters<Handler>[0]) => ReturnType<Handler>;
 	}> = [];
 	for (const file of sortByDepthAsc(nfFiles)) {
-    const dir = dirname(file);
-    // See note above: use "+route.ts" to correctly map root to "/".
-    const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+		const dir = dirname(file);
+		// See note above: use "+route.ts" to correctly map root to "/".
+		const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
 		const modUrl = toModuleUrl(file);
 		const mod =
 			(await safeDynamicImport<Partial<NotFoundModule>>(modUrl)) || {};
@@ -267,6 +295,7 @@ export async function mountFileRouter(
 				base: hono,
 				handler: handler as (c: Parameters<Handler>[0]) => ReturnType<Handler>,
 			});
+			log.info(`not-found ${hono}/* <- ${relp(file)}`);
 		}
 	}
 
@@ -358,14 +387,13 @@ export async function mountFileRouter(
 			// may not expose a direct method (e.g. app.delete as a reserved name).
 			// Prefer the direct method when available, otherwise fall back to app.on().
 			const direct = (app as unknown as Record<string, unknown>)[method];
+			const chain = collectMiddlewareFor(file);
 			if (typeof direct === "function") {
-				const chain = collectMiddlewareFor(file);
 				// @ts-expect-error dynamic method indexing
 				app[method](hono, ...chain, handler);
 			} else {
 				// Use generic registrar as a robust fallback
 				// Hono expects the HTTP verb in uppercase for app.on()
-				const chain = collectMiddlewareFor(file);
 				(
 					app as unknown as {
 						on: (m: string, p: string, ...h: Handler[]) => void;
@@ -377,6 +405,11 @@ export async function mountFileRouter(
 					handler as unknown as Handler,
 				);
 			}
+
+			// Human-friendly info about the mounted route
+			log.info(
+				`route ${method.toUpperCase()} ${hono} [mw:${chain.length}] <- ${relp(file)}`,
+			);
 
 			// Register OpenAPI metadata
 			if (mergedOA.method && mergedOA.path) {
