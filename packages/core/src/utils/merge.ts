@@ -51,11 +51,11 @@ export function mergeOpenAPI(
 		if (cfgOA.filePath !== undefined) out.filePath = cfgOA.filePath;
 	}
 
-	// Preenche inferidos apenas se ausentes
+	// Fill inferred values only if missing
 	if (!out.method && inferred.method) out.method = inferred.method;
 	if (!out.path && inferred.path) out.path = inferred.path;
 
-	// Normalizações úteis
+	// Useful normalizations
 	if (out.tags && typeof out.tags === "string") out.tags = [out.tags];
 
 	return out;

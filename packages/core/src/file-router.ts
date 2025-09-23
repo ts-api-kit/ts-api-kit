@@ -523,16 +523,16 @@ export async function mountFileRouter(
 			const cfg = hdl.__routeConfig ?? {};
 			const cfgOA = cfg.openapi ?? {};
 
-			// 1) coleta JSDoc associado ao export
+			// 1) collect JSDoc associated with the export
 			const jsdocOA = readRouteJSDocForExport(file, exportName);
 
-			// 2) mescla com a config do handler, com precedência para config
+			// 2) merge with handler config, giving precedence to config
 			const mergedOA = mergeOpenAPI(jsdocOA, cfgOA, { method, path: openapi });
 
 			// Add filePath for JSDoc extraction
 			mergedOA.filePath = file;
 
-			// 3) aplica de volta no handler para consumo do gerador
+			// 3) apply back to the handler for generator consumption
 			cfg.openapi = mergedOA;
 
 			// Validation: ensure consistency between export name and declared method

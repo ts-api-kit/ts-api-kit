@@ -20,9 +20,9 @@ export function defineMiddleware(
 }
 
 /**
- * Alias ergonômico para definir middlewares, mantendo simetria com `handle`.
+ * Ergonomic alias to define middlewares, mirroring the `handle` API.
  *
- * Exemplo:
+ * Example:
  *   export const USE = use(logger(), auth())
  */
 export const use = defineMiddleware;
