@@ -361,6 +361,32 @@ server.start(3000);
 - Programmatic control: `import { setLogLevel } from "@ts-api-kit/core/utils"; setLogLevel("silent")`.
 - The file router also accepts per-call options: `mountFileRouter(app, { routesDir, logLevel: "debug" })` or `{ silent: true }`.
 
+## Per-directory +config.ts
+
+Add a `+config.ts` file in any routes folder to apply scoped configuration as middleware to that path and its children.
+
+Example:
+
+```ts
+// src/routes/+config.ts
+import type { DirConfig } from "@ts-api-kit/core";
+
+export default {
+  body: { limit: 1_048_576 },           // 1MB Content-Length limit
+  timeout: { ms: 5000 },                // 5s soft timeout (504 on exceed)
+  cors: { origin: "*", credentials: true },
+  auth: { required: false },            // if true, requires Authorization header
+  rateLimit: { windowMs: 60000, max: 120, policy: "120;w=60" }, // headers only
+} satisfies DirConfig;
+```
+
+Notes:
+- CORS is header-based and handles preflight (OPTIONS 204).
+- Body limit uses `Content-Length` best-effort (does not stream-measure body).
+- Timeout is soft; work may continue server-side, but the client receives 504.
+- `auth.required` only enforces presence of `Authorization` header.
+- `rateLimit` only emits informational headers (no enforcement).
+
 ## Schema Examples (Valibot)
 
 ```ts
