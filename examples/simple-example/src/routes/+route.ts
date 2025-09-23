@@ -20,7 +20,7 @@ export const GET = handle(
       },
     },
   },
-  ({ response }) => {
+  async ({ response }) => {
     return response.ok({
       user: {
         id: 1,
