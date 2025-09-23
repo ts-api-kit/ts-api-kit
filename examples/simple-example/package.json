@@ -49,8 +49,8 @@
     }
   },
   "scripts": {
-    "dev": "node --watch --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts",
-    "dev:node": "node --watch --experimental-transform-types --no-warnings src/index.ts",
+    "dev": "node --env-file=.env --watch --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts",
+    "dev:node": "node --env-file=.env --watch --experimental-transform-types --no-warnings src/index.ts",
     "dev:bun": "bun --watch src/index.ts",
     "dev:deno": "deno run -A --watch src/index.ts",
     "build": "tsc",
