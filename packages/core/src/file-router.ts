@@ -6,7 +6,7 @@ import { dirname, join, relative as relPath, resolve } from "pathe";
 import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
-import { setActiveLayouts, setCurrentFilePath, type LayoutComponent } from "./server.ts";
+import { setActiveLayouts, setCurrentFilePath, type LayoutComponent, handle } from "./server.ts";
 import type {
 	ErrorModule,
 	MountResult,
@@ -437,29 +437,82 @@ export async function mountFileRouter(
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
-		const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
-		log.debug(`Module exports:`, Object.keys(mod));
+        const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
+        log.debug(`Module exports:`, Object.keys(mod));
 
-		// Support both named exports and default export
-		// If there's a default export, use it; otherwise use the module itself
-		const routeModule =
-			"default" in mod && mod.default ? mod.default : (mod as RouteModule);
-		log.debug(`Route module methods:`, Object.keys(routeModule));
-		log.debug(`Has default export:`, "default" in mod && !!mod.default);
+        // Gather handlers from both named exports and default object (if any)
+        const named = mod as unknown as Record<string, unknown>;
+        const defExport = (mod as unknown as Record<string, unknown>)["default"];
+        const defObj =
+            defExport && typeof defExport === "object" && !("call" in (defExport as object))
+                ? (defExport as Record<string, unknown>)
+                : undefined;
+        const defFn = typeof defExport === "function" ? (defExport as unknown) : undefined;
 
-        // Process all exports to infer methods and handle OpenAPI registration
-        for (const [exportName, value] of Object.entries(routeModule)) {
-            const method = inferMethodFromExport(exportName);
-            if (!method) continue; // Skip non-HTTP method exports
+        const handlers = new Map<HttpMethod, Handler>();
+
+        const addIfHandler = (obj: Record<string, unknown>, key: string) => {
+            const v = obj?.[key];
+            if (typeof v === "function") return (v as unknown as Handler);
+            return undefined;
+        };
+
+        for (const m of METHOD_EXPORTS) {
+            const hNamed = addIfHandler(named, m);
+            if (hNamed) handlers.set(m.toLowerCase() as HttpMethod, hNamed);
+        }
+        // Support ALL fallback on named object
+        const allNamed = addIfHandler(named, "ALL");
+        if (allNamed) {
+            for (const m of METHOD_EXPORTS) {
+                const mm = m.toLowerCase() as HttpMethod;
+                if (!handlers.has(mm)) handlers.set(mm, allNamed);
+            }
+        }
+
+        // Merge default object handlers (do not override named ones)
+        if (defObj) {
+            for (const m of METHOD_EXPORTS) {
+                const h = addIfHandler(defObj, m);
+                if (h) {
+                    const mm = m.toLowerCase() as HttpMethod;
+                    if (!handlers.has(mm)) handlers.set(mm, h);
+                }
+            }
+            const allDef = addIfHandler(defObj, "ALL");
+            if (allDef) {
+                for (const m of METHOD_EXPORTS) {
+                    const mm = m.toLowerCase() as HttpMethod;
+                    if (!handlers.has(mm)) handlers.set(mm, allDef);
+                }
+            }
+        }
+
+        // For TSX/JSX routes: allow default export function as ALL with text/html
+        const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
+        if (isJsxRoute && defFn) {
+            const wrapped = handle(defFn as (c: Parameters<Handler>[0]) => unknown | Promise<unknown>, file);
+            for (const m of METHOD_EXPORTS) {
+                const mm = m.toLowerCase() as HttpMethod;
+                if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);
+            }
+        }
+
+        // No handlers found: skip
+        if (!handlers.size) continue;
+
+        // Process handlers to infer methods and handle OpenAPI registration
+        for (const [method, handler] of handlers) {
+            const exportName = method.toUpperCase();
 
 			type HandlerWithConfig = Handler & {
 				__routeConfig?: { openapi?: Parameters<typeof mergeOpenAPI>[1] };
 			};
-			const handler = value as unknown as HandlerWithConfig;
-			if (typeof handler !== "function") continue;
+            const hdl = handler as unknown as HandlerWithConfig;
+            if (typeof hdl !== "function") continue;
 
 			// Get route config from handler metadata
-			const cfg = handler.__routeConfig ?? {};
+			const cfg = hdl.__routeConfig ?? {};
 			const cfgOA = cfg.openapi ?? {};
 
 			// 1) coleta JSDoc associado ao export
@@ -493,16 +546,18 @@ export async function mountFileRouter(
 			// Register in Hono with the runtime path(s). Some environments or versions
 			// may not expose a direct method (e.g. app.delete as a reserved name).
 			// Prefer the direct method when available, otherwise fall back to app.on().
-            const direct = (app as unknown as Record<string, unknown>)[method];
-            const chain = collectMiddlewareFor(file);
-            const layouts = collectLayoutsFor(file);
-            if (layouts.length) {
-                const setLayoutsMw: MiddlewareHandler = async (c, next) => {
-                    setActiveLayouts(c, layouts);
-                    await next();
-                };
-                chain.push(setLayoutsMw);
-            }
+			const direct = (app as unknown as Record<string, unknown>)[method];
+			const chain = collectMiddlewareFor(file);
+			const layouts = collectLayoutsFor(file);
+			if (layouts.length) {
+				const setLayoutsMw: MiddlewareHandler = async (c, next) => {
+					setActiveLayouts(c, layouts);
+					// ensure the current file path is available during request handling
+					setCurrentFilePath(file);
+					await next();
+				};
+				chain.push(setLayoutsMw);
+			}
 			
 			// Register each path (multiple paths for optional segments)
             for (const path of paths) {
@@ -519,8 +574,8 @@ export async function mountFileRouter(
 					).on(
 						method.toUpperCase(),
 						path,
-						...(chain as unknown as Handler[]),
-						handler as unknown as Handler,
+					...(chain as unknown as Handler[]),
+						hdl as unknown as Handler,
 					);
 				}
 
