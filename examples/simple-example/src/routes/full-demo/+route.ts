@@ -43,12 +43,12 @@ const rateLimitHeaders = headers.of<{
 /**
  * @summary Full demo - GET
  * @description
- * Demonstra validação de query e headers, cookies, diferentes formatos
- * de resposta (JSON/HTML/stream/arquivo), redirecionamento, rate limit
- * e mapeamento automático para OpenAPI.
+ * Demonstrates validation of query and headers, cookies, different formats
+ * of response (JSON/HTML/stream/file), redirection, rate limiting,
+ * and automatic mapping to OpenAPI.
  * @tags demo advanced
  * @security [{"bearerAuth":[]}]
- * @externalDocs {"url":"https://github.com/ts-api-kit/ts-api-kit","description":"Projeto TS API Kit"}
+ * @externalDocs {"url":"https://github.com/ts-api-kit/ts-api-kit","description":"TS API Kit project"}
  * @operationId fullDemoGet
  */
 export const GET = handle(
@@ -56,17 +56,17 @@ export const GET = handle(
 		openapi: {
 			request: {
 				/**
-				 * @description Parâmetros de busca e paginação
+				 * @description Search and pagination parameters
 				 */
 				query: v.object({
-					/** @description Página atual @example 1 */
+					/** @description Current page @example 1 */
 					page: v.optional(v.pipe(v.string(), v.transform(Number))),
-					/** @description Itens por página @example 20 */
+					/** @description Items per page @example 20 */
 					pageSize: v.optional(v.pipe(v.string(), v.transform(Number))),
-					/** @description Texto de busca @example "john" */
+					/** @description Search text @example "john" */
 					search: v.optional(v.string()),
 					/**
-					 * @description Formato de saída
+					 * @description Output format
 					 * @example "json"
 					 */
 					format: v.optional(
@@ -78,37 +78,37 @@ export const GET = handle(
 							v.literal("redirect"),
 						]),
 					),
-					/** @description Se true, retorna 202 (processing) @example false */
+					/** @description If true, returns 202 (processing) @example false */
 					pending: v.optional(
 						v.pipe(
 							v.string(),
 							v.transform((s) => s === "true"),
 						),
 					),
-					/** @description Simular erro 403 @example false */
+					/** @description Simulate 403 error @example false */
 					forbidden: v.optional(
 						v.pipe(
 							v.string(),
 							v.transform((s) => s === "true"),
 						),
 					),
-					/** @description Simular rate limit (429) @example false */
+					/** @description Simulate rate limit (429) @example false */
 					throttle: v.optional(
 						v.pipe(
 							v.string(),
 							v.transform((s) => s === "true"),
 						),
 					),
-					/** @description URL para redirecionar quando format=redirect @example "/" */
+					/** @description URL to redirect to when format=redirect @example "/" */
 					redirectTo: v.optional(v.string()),
 				}),
 				/**
-				 * @description Headers aceitos
+				 * @description Accepted headers
 				 */
 				headers: v.object({
-					/** @description ID de requisição (trace) @example "req-123" */
+					/** @description Request ID (trace) @example "req-123" */
 					"x-request-id": v.optional(v.string()),
-					/** @description Idioma preferido @example "pt-BR" */
+					/** @description Preferred language @example "pt-BR" */
 					"accept-language": v.optional(v.string()),
 				}),
 			},
@@ -135,19 +135,19 @@ export const GET = handle(
 		},
 	},
 	async ({ query, headers, response }) => {
-		// Cookies e contexto de request
+		// Cookies and request context
 		const evt = getRequestEvent();
 		const reqId = headers["x-request-id"] || evt.headers?.["x-request-id"]; // validated or raw
 		if (reqId) evt.cookies.set("rid", String(reqId));
 
-		// Redirecionamento explícito
+		// Explicit redirect
 		if (query.format === "redirect") {
 			return response.redirect(query.redirectTo ?? "/", 303);
 		}
 
-		// Simular erros comuns
+		// Simulate common errors
 		if (query.forbidden) {
-			// Lança erro tipado -> 403
+			// Throw typed error -> 403
 			error(403, "Acesso negado", { reason: "demo" });
 		}
 		if (query.throttle) {
@@ -160,7 +160,7 @@ export const GET = handle(
 			});
 		}
 
-		// Diferentes formatos de saída
+		// Different output formats
 		if (query.format === "html") {
 			return response.html(
 				`<html><body><h1>Full Demo</h1><p>reqId=${
@@ -201,10 +201,10 @@ export const GET = handle(
 		);
 		const items = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-		// Cookie de visita
+		// Visit cookie
 		evt.cookies.set("lastVisit", new Date().toISOString());
 
-		// 202 Accepted opcional
+		// Optional 202 Accepted
 		if (query.pending) {
 			return response.accepted({ message: "Processando" });
 		}
@@ -231,7 +231,7 @@ export const GET = handle(
 
 /**
  * @summary Full demo - POST (create)
- * @description Cria um usuário com validação de body, headers e exemplos no OpenAPI.
+ * @description Creates a user with body/header validation and OpenAPI examples.
  * @tags demo advanced users
  * @security [{"bearerAuth":[]}]
  * @operationId fullDemoCreate
@@ -240,23 +240,23 @@ export const POST = handle(
 	{
 		openapi: {
 			request: {
-				/** @description Headers obrigatórios */
+				/** @description Required headers */
 				headers: v.object({
-					/** @description Token Bearer @example "Bearer <jwt>" */
+					/** @description Bearer token @example "Bearer <jwt>" */
 					authorization: v.string(),
 				}),
 				/**
-				 * @description Corpo da requisição
+				 * @description Request body
 				 **/
 				body: v.object({
 					/**
-					 * @description Nome
+					 * @description Name
 					 * @example "John Doe"
 					 **/
 					name: v.string(),
 					/** @description Email @example "john.doe@example.com" */
 					email: v.string(),
-					/** @description Perfis do usuário @example ["viewer"] */
+					/** @description User roles @example ["viewer"] */
 					roles: v.optional(
 						v.array(
 							v.union([
@@ -268,7 +268,7 @@ export const POST = handle(
 					),
 					profile: v.optional(
 						v.object({
-							/** @description Bio curta @example "About me" */
+							/** @description Short bio @example "About me" */
 							bio: v.optional(v.string()),
 							/** @description Website @example "https://example.com" */
 							website: v.optional(v.string()),
@@ -319,7 +319,7 @@ export const POST = handle(
 
 /**
  * @summary Full demo - PUT (replace)
- * @description Atualiza dados do usuário.
+ * @description Updates user data.
  * @tags demo users
  * @operationId fullDemoUpdate
  */
@@ -328,9 +328,9 @@ export const PUT = handle(
 		openapi: {
 			request: {
 				body: v.object({
-					/** @description ID do usuário @example "uuid" */
+					/** @description User ID @example "uuid" */
 					id: v.string(),
-					/** @description Nome @example "Jane Doe" */
+					/** @description Name @example "Jane Doe" */
 					name: v.string(),
 					/** @description Email @example "jane.doe@example.com" */
 					email: v.string(),
@@ -359,7 +359,7 @@ export const PUT = handle(
 
 /**
  * @summary Full demo - PATCH (partial)
- * @description Atualização parcial do usuário.
+ * @description Partial user update.
  * @tags demo users
  * @operationId fullDemoPatch
  */
@@ -368,9 +368,9 @@ export const PATCH = handle(
 		openapi: {
 			request: {
 				body: v.object({
-					/** @description ID do usuário */
+					/** @description User ID */
 					id: v.string(),
-					/** @description Nome */
+					/** @description Name */
 					name: v.optional(v.string()),
 					/** @description Email */
 					email: v.optional(v.string()),
@@ -394,7 +394,7 @@ export const PATCH = handle(
 
 /**
  * @summary Full demo - DELETE
- * @description Remove um usuário por querystring.
+ * @description Removes a user via querystring.
  * @tags demo users
  * @operationId fullDemoDelete
  */
@@ -403,7 +403,7 @@ export const DELETE = handle(
 		openapi: {
 			request: {
 				query: v.object({
-					/** @description ID do usuário */
+					/** @description User ID */
 					id: v.string(),
 				}),
 			},
@@ -423,7 +423,7 @@ export const DELETE = handle(
 
 /**
  * @summary Full demo - OPTIONS
- * @description Expõe métodos suportados via texto puro.
+ * @description Exposes supported methods via plain text.
  * @tags demo
  * @operationId fullDemoOptions
  */
@@ -443,7 +443,7 @@ export const OPTIONS = handle(
 
 /**
  * @summary Full demo - HEAD
- * @description Resposta sem corpo com headers de controle.
+ * @description Bodyless response with control headers.
  * @tags demo
  * @operationId fullDemoHead
  */

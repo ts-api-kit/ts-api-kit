@@ -115,15 +115,15 @@ const ROUTES: RouteMeta[] = [];
  * @param meta - Route definition including method, path and OpenAPI extras
  */
 export function registerRoute(meta: RouteMeta): void {
-	// Atualiza rota existente ou adiciona nova
+	// Update existing route or add a new one
 	const key = `${meta.method} ${meta.path}`;
 	const existingIndex = ROUTES.findIndex(
 		(r) => `${r.method} ${r.path}` === key,
 	);
 	if (existingIndex >= 0) {
-		ROUTES[existingIndex] = meta; // Atualiza rota existente
+		ROUTES[existingIndex] = meta; // Update existing route
 	} else {
-		ROUTES.push(meta); // Adiciona nova rota
+		ROUTES.push(meta); // Add new route
 	}
 }
 
@@ -147,7 +147,7 @@ export function buildOpenAPIDocument(_opts: {
 	return getOpenApiJson();
 }
 
-// Exponha utilitário para registro lazy a partir dos handlers
+// Expose utility for lazy registration from handlers
 /**
  * Registers OpenAPI metadata lazily once a handler is first executed.
  *

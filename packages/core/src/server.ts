@@ -679,7 +679,7 @@ function isStandard(s: unknown): s is AnySchema {
 	);
 }
 
-// DX: shape de issue estável
+// DX: stable issue shape
 /**
  * Normalised validation issue shape used in error responses.
  */
@@ -722,7 +722,7 @@ function formatIssues(raw: ReadonlyArray<unknown> = []): Issue[] {
 	});
 }
 
-// Validação por parte (params/query/headers/body) com localização
+// Per-part validation (params/query/headers/body) with location
 async function validatePart<S extends AnySchema>(
 	where: "params" | "query" | "headers" | "body",
 	schema: S | undefined,
@@ -949,7 +949,7 @@ function coerceQuery(obj: Record<string, unknown>) {
 			out[k] = undefined;
 			continue;
 		}
-		// Desabilitado: coerção automática de string para number
+		// Disabled: automatic string-to-number coercion
 		// if (typeof v === "string" && /^-?\d+$/.test(v)) { out[k] = Number(v); continue; }
 		if (v === "true" || v === "false") {
 			out[k] = v === "true";
@@ -994,11 +994,11 @@ export function createHandler<T extends RouteSpec>(
         try {
             setRequestContext(c);
 
-			// Registro lazy: método+path da rota do Hono
+			// Lazy registration: method + path of the Hono route
 			if (!registered && spec && (spec as WithOpenAPI).openapi) {
-				// Hono expõe o padrão de rota em c.req.routePath em v4+; fallback para c.req.path
+				// Hono exposes the route pattern in c.req.routePath in v4+; fallback to c.req.path
 				const method = c.req.method.toLowerCase() as HttpMethod;
-				const path = routePath(c) ?? c.req.path; // pode ser "/users/:id"
+				const path = routePath(c) ?? c.req.path; // may be "/users/:id"
 				const { req, res, meta } = extractSchemas(spec);
 				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
 				// this.log.info(`Request schemas:`, req);
@@ -1482,7 +1482,7 @@ export default class Server {
 		// MOUNT ROUTES by file system (fora daqui)
 		// mountFileRouter(this.app, { routesDir: "./src/routes", basePath: "" });
 
-		// ── OpenAPI JSON é servido do arquivo gerado estaticamente
+		// ── OpenAPI JSON served from the statically generated file
 		this.app.get("/openapi.json", async (c) => {
 			try {
 				const fs = await import("node:fs");
@@ -1674,7 +1674,7 @@ export default class Server {
 						},
 					});
 				} else {
-					// Fallback para o sistema de registro em tempo de execução
+					// Fallback to the runtime registration system
 					const serverUrl = new URL(c.req.url);
 					const doc = buildOpenAPIDocument({
 						title: "API",
@@ -1780,7 +1780,7 @@ export default class Server {
 			}
 		});
 
-		// ── UI do Scalar em /docs
+		// ── Scalar UI at /docs
 		this.app.get(
 			"/docs",
 			Scalar({
