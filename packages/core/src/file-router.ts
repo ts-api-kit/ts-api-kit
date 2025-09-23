@@ -6,7 +6,7 @@ import { dirname, join, relative as relPath, resolve } from "pathe";
 import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
-import { setCurrentFilePath } from "./server.ts";
+import { setActiveLayouts, setCurrentFilePath, type LayoutComponent } from "./server.ts";
 import type {
 	ErrorModule,
 	MountResult,
@@ -117,10 +117,16 @@ const DEFAULT_ROUTE_GLOBS = [
 	"**/+route.jsx",
 ];
 const DEFAULT_MW_GLOBS = [
-	"**/+middleware.ts",
-	"**/+middleware.tsx",
-	"**/+middleware.js",
-	"**/+middleware.jsx",
+    "**/+middleware.ts",
+    "**/+middleware.tsx",
+    "**/+middleware.js",
+    "**/+middleware.jsx",
+];
+const DEFAULT_LAYOUT_GLOBS = [
+    "**/+layout.ts",
+    "**/+layout.tsx",
+    "**/+layout.js",
+    "**/+layout.jsx",
 ];
 const DEFAULT_CONFIG_GLOBS = [
     "**/+config.ts",
@@ -158,8 +164,8 @@ function sortByDepthAsc(paths: string[]) {
  * @returns Number of mounted routes and middleware for diagnostics
  */
 export async function mountFileRouter(
-	app: Hono,
-	opts: FileRouterOptions,
+    app: Hono,
+    opts: FileRouterOptions,
 ): Promise<MountResult> {
 	// Optional per-call logging control
 	if (opts.silent) setLogLevel("silent");
@@ -171,9 +177,9 @@ export async function mountFileRouter(
 		: baseLog;
 	const routesDir = resolve(opts.routesDir);
 	const relp = (p: string) => relPath(routesDir, p);
-	const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
-	const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
-	const cfgGlobs = opts.configGlobs ?? DEFAULT_CONFIG_GLOBS;
+    const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
+    const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
+    const cfgGlobs = opts.configGlobs ?? DEFAULT_CONFIG_GLOBS;
 
 	log.debug("Routes directory:", routesDir);
 	log.debug("Route globs:", routeGlobs);
@@ -194,11 +200,11 @@ export async function mountFileRouter(
 	});
 	log.debug("All files in routes directory:", allFiles);
 
-	const mwFiles = await fg(mwGlobs, {
-		cwd: routesDir,
-		absolute: true,
-		dot: false,
-	});
+    const mwFiles = await fg(mwGlobs, {
+        cwd: routesDir,
+        absolute: true,
+        dot: false,
+    });
 
     log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
@@ -340,22 +346,63 @@ export async function mountFileRouter(
 	}
 
 	// Helper: collect middleware chain from routes root down to file's directory
-	const collectMiddlewareFor = (file: string): MiddlewareHandler[] => {
-		const chain: MiddlewareHandler[] = [];
-		const stack: MiddlewareHandler[][] = [];
-		let cur = dirname(file);
-		while (cur.startsWith(routesDir)) {
-			const m = mwsByDir.get(cur);
-			if (m?.length) stack.push(m);
-			if (cur === routesDir) break;
-			const parent = dirname(cur);
-			if (parent === cur) break;
-			cur = parent;
-		}
-		// ensure root-most first
-		for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
-		return chain;
-	};
+    const collectMiddlewareFor = (file: string): MiddlewareHandler[] => {
+        const chain: MiddlewareHandler[] = [];
+        const stack: MiddlewareHandler[][] = [];
+        let cur = dirname(file);
+        while (cur.startsWith(routesDir)) {
+            const m = mwsByDir.get(cur);
+            if (m?.length) stack.push(m);
+            if (cur === routesDir) break;
+            const parent = dirname(cur);
+            if (parent === cur) break;
+            cur = parent;
+        }
+        // ensure root-most first
+        for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
+        return chain;
+    };
+
+    // Discover +layout.* files and map them by directory
+    const layoutFiles = await fg(DEFAULT_LAYOUT_GLOBS, {
+        cwd: routesDir,
+        absolute: true,
+        dot: false,
+    });
+    log.debug("Found layout files:", layoutFiles);
+    const layoutsByDir = new Map<string, LayoutComponent>();
+    for (const file of sortByDepthAsc(layoutFiles)) {
+        const dir = dirname(file);
+        const modUrl = toModuleUrl(file);
+        const mod = (await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
+        const layout = mod.default as unknown;
+        if (typeof layout === "function") {
+            layoutsByDir.set(dir, layout as LayoutComponent);
+            try {
+                const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+                log.info(`layout ${hono} <- ${relp(file)}`);
+            } catch {
+                // best effort only
+            }
+        }
+    }
+
+    const collectLayoutsFor = (file: string): LayoutComponent[] => {
+        const chain: LayoutComponent[] = [];
+        const stack: LayoutComponent[] = [];
+        let cur = dirname(file);
+        while (cur.startsWith(routesDir)) {
+            const l = layoutsByDir.get(cur);
+            if (l) stack.push(l);
+            if (cur === routesDir) break;
+            const parent = dirname(cur);
+            if (parent === cur) break;
+            cur = parent;
+        }
+        // ensure root-most first
+        for (let i = stack.length - 1; i >= 0; i--) chain.push(stack[i]);
+        return chain;
+    };
 
 	// Register OPTIONS preflights to ensure CORS middleware runs for preflight requests
 	for (const { base, dir } of cfgPreflights) {
@@ -400,10 +447,10 @@ export async function mountFileRouter(
 		log.debug(`Route module methods:`, Object.keys(routeModule));
 		log.debug(`Has default export:`, "default" in mod && !!mod.default);
 
-		// Process all exports to infer methods and handle OpenAPI registration
-		for (const [exportName, value] of Object.entries(routeModule)) {
-			const method = inferMethodFromExport(exportName);
-			if (!method) continue; // Skip non-HTTP method exports
+        // Process all exports to infer methods and handle OpenAPI registration
+        for (const [exportName, value] of Object.entries(routeModule)) {
+            const method = inferMethodFromExport(exportName);
+            if (!method) continue; // Skip non-HTTP method exports
 
 			type HandlerWithConfig = Handler & {
 				__routeConfig?: { openapi?: Parameters<typeof mergeOpenAPI>[1] };
@@ -446,15 +493,23 @@ export async function mountFileRouter(
 			// Register in Hono with the runtime path(s). Some environments or versions
 			// may not expose a direct method (e.g. app.delete as a reserved name).
 			// Prefer the direct method when available, otherwise fall back to app.on().
-			const direct = (app as unknown as Record<string, unknown>)[method];
-			const chain = collectMiddlewareFor(file);
+            const direct = (app as unknown as Record<string, unknown>)[method];
+            const chain = collectMiddlewareFor(file);
+            const layouts = collectLayoutsFor(file);
+            if (layouts.length) {
+                const setLayoutsMw: MiddlewareHandler = async (c, next) => {
+                    setActiveLayouts(c, layouts);
+                    await next();
+                };
+                chain.push(setLayoutsMw);
+            }
 			
 			// Register each path (multiple paths for optional segments)
-			for (const path of paths) {
-				if (typeof direct === "function") {
-					// @ts-expect-error dynamic method indexing
-					app[method](path, ...chain, handler);
-				} else {
+            for (const path of paths) {
+                if (typeof direct === "function") {
+                    // @ts-expect-error dynamic method indexing
+                    app[method](path, ...chain, handler);
+                } else {
 					// Use generic registrar as a robust fallback
 					// Hono expects the HTTP verb in uppercase for app.on()
 					(
