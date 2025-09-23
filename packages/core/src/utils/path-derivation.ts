@@ -11,9 +11,11 @@ const FILE_RE = /(\+?route\.(?:t|j)sx?)$/; // +route.ts, route.ts, +route.tsx, e
 /**
  * Converts a file path to paths for Hono and OpenAPI.
  * Examples:
- *   routes/users/[id]/+route.ts    → { hono: '/users/:id', openapi: '/users/{id}' }
- *   routes/blog/[...slug]/route.ts → { hono: '/blog/:slug{.*}', openapi: '/blog/{slug}' }
- *   routes/(grp)/index/+route.ts   → { hono: '/',             openapi: '/' }
+ *   routes/users/[id]/+route.ts        → { hono: '/users/:id', openapi: '/users/{id}' }
+ *   routes/blog/[...slug]/route.ts     → { hono: '/blog/:slug{.*}', openapi: '/blog/{slug}' }
+ *   routes/[[locale]]/+route.ts        → { hono: '/:locale', openapi: '/{locale}' }
+ *   routes/users/[id([0-9]+)]/+route.ts → { hono: '/users/:id([0-9]+)', openapi: '/users/{id}' }
+ *   routes/(grp)/index/+route.ts       → { hono: '/', openapi: '/' }
  */
 export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 	// normalize separators
@@ -43,12 +45,49 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 		// ignore groups (e.g., (admin))
 		if (seg.startsWith("(") && seg.endsWith(")")) continue;
 
-		// catch-all: [...slug] or [[...slug]]
-		const mCatch =
-			seg.match(/^\[\.+\.\.\.(.+)\]$/) || seg.match(/^\[\[\.+\.\.\.(.+)\]\]$/);
+		// catch-all: [...slug]
+		const mCatch = seg.match(/^\[\.+\.\.\.(.+)\]$/);
 		if (mCatch) {
 			const name = mCatch[1];
 			honoSegs.push(`:${name}{.*}`);
+			oaSegs.push(`{${name}}`);
+			continue;
+		}
+
+		// optional catch-all: [[...slug]]
+		const mOptCatch = seg.match(/^\[\[\.+\.\.\.(.+)\]\]$/);
+		if (mOptCatch) {
+			const name = mOptCatch[1];
+			honoSegs.push(`:${name}{.*}`);
+			oaSegs.push(`{${name}}`);
+			continue;
+		}
+
+		// optional dynamic: [[locale]] or [[id]]
+		const mOptDyn = seg.match(/^\[\[(.+)\]\]$/);
+		if (mOptDyn) {
+			const name = mOptDyn[1];
+			honoSegs.push(`:${name}`);
+			oaSegs.push(`{${name}}`);
+			continue;
+		}
+
+		// dynamic with regex: [id(\\d+)] or [slug([a-z-]+)]
+		const mDynRegex = seg.match(/^\[(.+)\((.+)\)\]$/);
+		if (mDynRegex) {
+			const name = mDynRegex[1];
+			const regex = mDynRegex[2];
+			honoSegs.push(`:${name}(${regex})`);
+			oaSegs.push(`{${name}}`);
+			continue;
+		}
+
+		// optional dynamic with regex: [[id([0-9]+)]]
+		const mOptDynRegex = seg.match(/^\[\[(.+)\((.+)\)\]\]$/);
+		if (mOptDynRegex) {
+			const name = mOptDynRegex[1];
+			const regex = mOptDynRegex[2];
+			honoSegs.push(`:${name}(${regex})`);
 			oaSegs.push(`{${name}}`);
 			continue;
 		}

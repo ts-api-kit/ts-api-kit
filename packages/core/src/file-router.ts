@@ -327,6 +327,11 @@ export async function mountFileRouter(
 		const { hono, openapi } = derivePathsFromFile(file);
 		log.debug(`Derived paths - Hono: ${hono}, OpenAPI: ${openapi}`);
 
+		// Check if this route has optional segments and create multiple paths
+		const hasOptionalSegments = file.includes("[[") && file.includes("]]");
+		const paths = hasOptionalSegments ? [hono, hono.replace(/\/:[^/]+/g, "")] : [hono];
+		log.debug(`Paths to register: ${paths.join(", ")}`);
+
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
@@ -383,33 +388,37 @@ export async function mountFileRouter(
 
 			log.debug(`Adding ${method.toUpperCase()} handler to ${hono}`);
 
-			// Register in Hono with the runtime path. Some environments or versions
+			// Register in Hono with the runtime path(s). Some environments or versions
 			// may not expose a direct method (e.g. app.delete as a reserved name).
 			// Prefer the direct method when available, otherwise fall back to app.on().
 			const direct = (app as unknown as Record<string, unknown>)[method];
 			const chain = collectMiddlewareFor(file);
-			if (typeof direct === "function") {
-				// @ts-expect-error dynamic method indexing
-				app[method](hono, ...chain, handler);
-			} else {
-				// Use generic registrar as a robust fallback
-				// Hono expects the HTTP verb in uppercase for app.on()
-				(
-					app as unknown as {
-						on: (m: string, p: string, ...h: Handler[]) => void;
-					}
-				).on(
-					method.toUpperCase(),
-					hono,
-					...(chain as unknown as Handler[]),
-					handler as unknown as Handler,
+			
+			// Register each path (multiple paths for optional segments)
+			for (const path of paths) {
+				if (typeof direct === "function") {
+					// @ts-expect-error dynamic method indexing
+					app[method](path, ...chain, handler);
+				} else {
+					// Use generic registrar as a robust fallback
+					// Hono expects the HTTP verb in uppercase for app.on()
+					(
+						app as unknown as {
+							on: (m: string, p: string, ...h: Handler[]) => void;
+						}
+					).on(
+						method.toUpperCase(),
+						path,
+						...(chain as unknown as Handler[]),
+						handler as unknown as Handler,
+					);
+				}
+
+				// Human-friendly info about the mounted route
+				log.info(
+					`route ${method.toUpperCase()} ${path} [mw:${chain.length}] <- ${relp(file)}`,
 				);
 			}
-
-			// Human-friendly info about the mounted route
-			log.info(
-				`route ${method.toUpperCase()} ${hono} [mw:${chain.length}] <- ${relp(file)}`,
-			);
 
 			// Register OpenAPI metadata
 			if (mergedOA.method && mergedOA.path) {

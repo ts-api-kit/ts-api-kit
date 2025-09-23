@@ -136,7 +136,61 @@ export const PUT = handle(
 );
 ```
 
-### 5) Route-level middleware
+### 5) Optional segments and regex patterns
+
+TS API Kit supports advanced routing patterns including optional segments and regex validation:
+
+#### Optional segments
+Use double brackets `[[...]]` to create optional route segments:
+
+```ts
+// src/routes/[[locale]]/+route.ts
+export const GET = handle(async (c) => {
+  const locale = c.req.param("locale") || "en";
+  return { locale, message: `Hello in ${locale}` };
+});
+```
+
+This creates routes for both `/` and `/:locale` where the locale parameter is optional.
+
+#### Regex patterns
+Add regex validation directly in the route segment:
+
+```ts
+// src/routes/users/[id([0-9]+)]/+route.ts
+export const GET = handle(
+  {
+    openapi: {
+      request: {
+        params: v.object({ id: v.pipe(v.string(), v.transform(Number)) }),
+      },
+    },
+  },
+  async ({ params }) => {
+    return { user: { id: params.id, name: `User ${params.id}` } };
+  }
+);
+```
+
+This ensures only numeric IDs are accepted (e.g., `/users/123` but not `/users/abc`).
+
+#### Optional catch-all routes
+Combine optional segments with catch-all patterns:
+
+```ts
+// src/routes/blog/[[...slug]]/+route.ts
+export const GET = handle(async (c) => {
+  const slug = c.req.param("slug");
+  if (!slug) {
+    return { posts: "All blog posts" };
+  }
+  return { post: `Blog post: ${slug}` };
+});
+```
+
+This handles both `/blog` (all posts) and `/blog/any/nested/path` (specific post).
+
+### 6) Route-level middleware
 
 ```ts
 // src/routes/+middleware.ts
