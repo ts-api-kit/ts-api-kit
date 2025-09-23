@@ -37,7 +37,7 @@ export type ParameterJSDoc = {
 	example?: string;
 };
 
-/** Lê o bloco JSDoc que precede `export const|function <ExportName>` */
+/** Reads the JSDoc block that precedes `export const|function <ExportName>` */
 export function readRouteJSDocForExport(
 	filePath: string,
 	exportName: string,
@@ -61,7 +61,7 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 
 	const out: RouteJSDocOA = {};
 
-	// Helper p/ coletar bloco multi-linha após um tag até o próximo @tag
+	// Helper to collect a multi-line block after a tag until the next @tag
 	const collectMultiline = (startIdx: number, firstLineRemainder: string) => {
 		let text = firstLineRemainder.trim();
 		let i = startIdx + 1;
@@ -84,7 +84,7 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 			i = end;
 		} else if (line.startsWith("@tags")) {
 			const rest = line.replace("@tags", "").trim();
-			// Suporta vírgula ou espaço; múltiplos @tags acumulam
+			// Supports comma or whitespace; multiple @tags accumulate
 			const tags = rest
 				? rest
 						.split(/[,\s]+/)
@@ -96,7 +96,7 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 		} else if (line.startsWith("@deprecated")) {
 			out.deprecated = true;
 		} else if (line.startsWith("@security")) {
-			// Espera JSON inline (ex.: @security [{"bearerAuth":[]}])
+			// Expects inline JSON (e.g., @security [{"bearerAuth":[]}])
 			const json = line.replace("@security", "").trim();
 			if (json) {
 				try {
@@ -140,7 +140,7 @@ function parseJSDocBlock(block: string): RouteJSDocOA {
 	return out;
 }
 
-/** Lê JSDoc de um parâmetro específico dentro de um objeto Valibot */
+/** Reads JSDoc for a specific parameter inside a Valibot object */
 export function readParameterJSDoc(
 	filePath: string,
 	parameterName: string,
@@ -148,8 +148,8 @@ export function readParameterJSDoc(
 	try {
 		const src = fs.readFileSync(filePath, "utf8");
 
-		// Procura por JSDoc que precede a definição do parâmetro
-		// Padrão: /** ... */ parameterName: v.schema()
+		// Looks for JSDoc that precedes the parameter definition
+		// Pattern: /** ... */ parameterName: v.schema()
 		const re = new RegExp(
 			String.raw`/\*\*([\s\S]*?)\*/\s*${parameterName}\s*:`,
 			"m",
@@ -168,7 +168,7 @@ function parseParameterJSDocBlock(block: string): ParameterJSDoc {
 
 	const out: ParameterJSDoc = {};
 
-	// Helper para coletar bloco multi-linha após um tag até o próximo @tag
+	// Helper to collect a multi-line block after a tag until the next @tag
 	const collectMultiline = (startIdx: number, firstLineRemainder: string) => {
 		let text = firstLineRemainder.trim();
 		let i = startIdx + 1;
