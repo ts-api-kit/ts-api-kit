@@ -3,15 +3,20 @@ import { pathToFileURL } from "node:url";
 import fg from "fast-glob";
 import type { Handler, Hono, MiddlewareHandler } from "hono";
 import { dirname, join, relative as relPath, resolve } from "pathe";
+import { configToMiddleware, type DirConfig } from "./config.ts";
 import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
-import { setActiveLayouts, setCurrentFilePath, type LayoutComponent, handle } from "./server.ts";
+import {
+	handle,
+	type LayoutComponent,
+	setActiveLayouts,
+	setCurrentFilePath,
+} from "./server.ts";
 import type {
 	ErrorModule,
 	MountResult,
 	NotFoundModule,
-	RouteModule,
 	RouteModuleExport,
 } from "./types.ts";
 import { readRouteJSDocForExport } from "./utils/jsdoc-extractor.ts";
@@ -19,7 +24,6 @@ import { createLogger, type Logger, setLogLevel } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
-import { configToMiddleware, type DirConfig } from "./config.ts";
 
 function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
 	for (const n of names) {
@@ -91,8 +95,8 @@ export interface FileRouterOptions {
 	 */
 	logLevel?: "debug" | "info" | "warn" | "error" | "silent";
 	silent?: boolean;
-  /** Glob patterns to find per-directory +config files. */
-  configGlobs?: string[];
+	/** Glob patterns to find per-directory +config files. */
+	configGlobs?: string[];
 }
 
 // HTTP method exports that we can infer from
@@ -105,11 +109,6 @@ const METHOD_EXPORTS = new Set([
 	"OPTIONS",
 	"HEAD",
 ]);
-
-function inferMethodFromExport(exportName: string): HttpMethod | undefined {
-	if (!METHOD_EXPORTS.has(exportName)) return undefined;
-	return exportName.toLowerCase() as HttpMethod;
-}
 const DEFAULT_ROUTE_GLOBS = [
 	"**/+route.ts",
 	"**/+route.tsx",
@@ -117,22 +116,22 @@ const DEFAULT_ROUTE_GLOBS = [
 	"**/+route.jsx",
 ];
 const DEFAULT_MW_GLOBS = [
-    "**/+middleware.ts",
-    "**/+middleware.tsx",
-    "**/+middleware.js",
-    "**/+middleware.jsx",
+	"**/+middleware.ts",
+	"**/+middleware.tsx",
+	"**/+middleware.js",
+	"**/+middleware.jsx",
 ];
 const DEFAULT_LAYOUT_GLOBS = [
-    "**/+layout.ts",
-    "**/+layout.tsx",
-    "**/+layout.js",
-    "**/+layout.jsx",
+	"**/+layout.ts",
+	"**/+layout.tsx",
+	"**/+layout.js",
+	"**/+layout.jsx",
 ];
 const DEFAULT_CONFIG_GLOBS = [
-    "**/+config.ts",
-    "**/+config.tsx",
-    "**/+config.js",
-    "**/+config.jsx",
+	"**/+config.ts",
+	"**/+config.tsx",
+	"**/+config.js",
+	"**/+config.jsx",
 ];
 const DEFAULT_ERROR_GLOBS = [
 	"**/+error.ts",
@@ -164,8 +163,8 @@ function sortByDepthAsc(paths: string[]) {
  * @returns Number of mounted routes and middleware for diagnostics
  */
 export async function mountFileRouter(
-    app: Hono,
-    opts: FileRouterOptions,
+	app: Hono,
+	opts: FileRouterOptions,
 ): Promise<MountResult> {
 	// Optional per-call logging control
 	if (opts.silent) setLogLevel("silent");
@@ -177,9 +176,9 @@ export async function mountFileRouter(
 		: baseLog;
 	const routesDir = resolve(opts.routesDir);
 	const relp = (p: string) => relPath(routesDir, p);
-    const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
-    const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
-    const cfgGlobs = opts.configGlobs ?? DEFAULT_CONFIG_GLOBS;
+	const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
+	const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
+	const cfgGlobs = opts.configGlobs ?? DEFAULT_CONFIG_GLOBS;
 
 	log.debug("Routes directory:", routesDir);
 	log.debug("Route globs:", routeGlobs);
@@ -200,13 +199,13 @@ export async function mountFileRouter(
 	});
 	log.debug("All files in routes directory:", allFiles);
 
-    const mwFiles = await fg(mwGlobs, {
-        cwd: routesDir,
-        absolute: true,
-        dot: false,
-    });
+	const mwFiles = await fg(mwGlobs, {
+		cwd: routesDir,
+		absolute: true,
+		dot: false,
+	});
 
-    log.debug("Found middleware files:", mwFiles);
+	log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
 	// Keep track of directories that provide +config for possible OPTIONS preflights
 	const cfgPreflights: Array<{ base: string; dir: string; file: string }> = [];
@@ -260,8 +259,11 @@ export async function mountFileRouter(
 	for (const file of sortByDepthAsc(cfgFiles)) {
 		const dir = dirname(file);
 		const modUrl = toModuleUrl(file);
-		const mod = (await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
-		const cfg = (mod["config"] ?? mod["CONFIG"] ?? mod["default"]) as unknown as DirConfig | undefined;
+		const mod =
+			(await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
+		const cfg = (mod.config ?? mod.CONFIG ?? mod.default) as unknown as
+			| DirConfig
+			| undefined;
 		if (!cfg || typeof cfg !== "object") continue;
 
 		const built = configToMiddleware(cfg);
@@ -346,63 +348,64 @@ export async function mountFileRouter(
 	}
 
 	// Helper: collect middleware chain from routes root down to file's directory
-    const collectMiddlewareFor = (file: string): MiddlewareHandler[] => {
-        const chain: MiddlewareHandler[] = [];
-        const stack: MiddlewareHandler[][] = [];
-        let cur = dirname(file);
-        while (cur.startsWith(routesDir)) {
-            const m = mwsByDir.get(cur);
-            if (m?.length) stack.push(m);
-            if (cur === routesDir) break;
-            const parent = dirname(cur);
-            if (parent === cur) break;
-            cur = parent;
-        }
-        // ensure root-most first
-        for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
-        return chain;
-    };
+	const collectMiddlewareFor = (file: string): MiddlewareHandler[] => {
+		const chain: MiddlewareHandler[] = [];
+		const stack: MiddlewareHandler[][] = [];
+		let cur = dirname(file);
+		while (cur.startsWith(routesDir)) {
+			const m = mwsByDir.get(cur);
+			if (m?.length) stack.push(m);
+			if (cur === routesDir) break;
+			const parent = dirname(cur);
+			if (parent === cur) break;
+			cur = parent;
+		}
+		// ensure root-most first
+		for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
+		return chain;
+	};
 
-    // Discover +layout.* files and map them by directory
-    const layoutFiles = await fg(DEFAULT_LAYOUT_GLOBS, {
-        cwd: routesDir,
-        absolute: true,
-        dot: false,
-    });
-    log.debug("Found layout files:", layoutFiles);
-    const layoutsByDir = new Map<string, LayoutComponent>();
-    for (const file of sortByDepthAsc(layoutFiles)) {
-        const dir = dirname(file);
-        const modUrl = toModuleUrl(file);
-        const mod = (await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
-        const layout = mod.default as unknown;
-        if (typeof layout === "function") {
-            layoutsByDir.set(dir, layout as LayoutComponent);
-            try {
-                const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
-                log.info(`layout ${hono} <- ${relp(file)}`);
-            } catch {
-                // best effort only
-            }
-        }
-    }
+	// Discover +layout.* files and map them by directory
+	const layoutFiles = await fg(DEFAULT_LAYOUT_GLOBS, {
+		cwd: routesDir,
+		absolute: true,
+		dot: false,
+	});
+	log.debug("Found layout files:", layoutFiles);
+	const layoutsByDir = new Map<string, LayoutComponent>();
+	for (const file of sortByDepthAsc(layoutFiles)) {
+		const dir = dirname(file);
+		const modUrl = toModuleUrl(file);
+		const mod =
+			(await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
+		const layout = mod.default as unknown;
+		if (typeof layout === "function") {
+			layoutsByDir.set(dir, layout as LayoutComponent);
+			try {
+				const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+				log.info(`layout ${hono} <- ${relp(file)}`);
+			} catch {
+				// best effort only
+			}
+		}
+	}
 
-    const collectLayoutsFor = (file: string): LayoutComponent[] => {
-        const chain: LayoutComponent[] = [];
-        const stack: LayoutComponent[] = [];
-        let cur = dirname(file);
-        while (cur.startsWith(routesDir)) {
-            const l = layoutsByDir.get(cur);
-            if (l) stack.push(l);
-            if (cur === routesDir) break;
-            const parent = dirname(cur);
-            if (parent === cur) break;
-            cur = parent;
-        }
-        // ensure root-most first
-        for (let i = stack.length - 1; i >= 0; i--) chain.push(stack[i]);
-        return chain;
-    };
+	const collectLayoutsFor = (file: string): LayoutComponent[] => {
+		const chain: LayoutComponent[] = [];
+		const stack: LayoutComponent[] = [];
+		let cur = dirname(file);
+		while (cur.startsWith(routesDir)) {
+			const l = layoutsByDir.get(cur);
+			if (l) stack.push(l);
+			if (cur === routesDir) break;
+			const parent = dirname(cur);
+			if (parent === cur) break;
+			cur = parent;
+		}
+		// ensure root-most first
+		for (let i = stack.length - 1; i >= 0; i--) chain.push(stack[i]);
+		return chain;
+	};
 
 	// Register OPTIONS preflights to ensure CORS middleware runs for preflight requests
 	for (const { base, dir } of cfgPreflights) {
@@ -431,85 +434,90 @@ export async function mountFileRouter(
 
 		// Check if this route has optional segments and create multiple paths
 		const hasOptionalSegments = file.includes("[[") && file.includes("]]");
-		const paths = hasOptionalSegments ? [hono, hono.replace(/\/:[^/]+/g, "")] : [hono];
+		const paths = hasOptionalSegments
+			? [hono, hono.replace(/\/:[^/]+/g, "")]
+			: [hono];
 		log.debug(`Paths to register: ${paths.join(", ")}`);
 
 		// Set the current file path context before importing the module
 		setCurrentFilePath(file);
 
-        const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
-        log.debug(`Module exports:`, Object.keys(mod));
+		const mod = await safeDynamicImport<RouteModuleExport>(modUrl);
+		log.debug(`Module exports:`, Object.keys(mod));
 
-        // Gather handlers from both named exports and default object (if any)
-        const named = mod as unknown as Record<string, unknown>;
-        const defExport = (mod as unknown as Record<string, unknown>)["default"];
-        const defObj =
-            defExport && typeof defExport === "object" && !("call" in (defExport as object))
-                ? (defExport as Record<string, unknown>)
-                : undefined;
-        const defFn = typeof defExport === "function" ? (defExport as unknown) : undefined;
+		// Gather handlers from both named exports and default object (if any)
+		const named = mod as unknown as Record<string, unknown>;
+		const defExport = (mod as unknown as Record<string, unknown>).default;
+		const defObj =
+			defExport &&
+			typeof defExport === "object" &&
+			!("call" in (defExport as object))
+				? (defExport as Record<string, unknown>)
+				: undefined;
+		const defFn =
+			typeof defExport === "function" ? (defExport as unknown) : undefined;
 
-        const handlers = new Map<HttpMethod, Handler>();
+		const handlers = new Map<HttpMethod, Handler>();
 
-        const addIfHandler = (obj: Record<string, unknown>, key: string) => {
-            const v = obj?.[key];
-            if (typeof v === "function") return (v as unknown as Handler);
-            return undefined;
-        };
+		const addIfHandler = (obj: Record<string, unknown>, key: string) => {
+			const v = obj?.[key];
+			if (typeof v === "function") return v as unknown as Handler;
+			return undefined;
+		};
 
-        for (const m of METHOD_EXPORTS) {
-            const hNamed = addIfHandler(named, m);
-            if (hNamed) handlers.set(m.toLowerCase() as HttpMethod, hNamed);
-        }
-        // Support ALL fallback on named object
-        const allNamed = addIfHandler(named, "ALL");
-        if (allNamed) {
-            for (const m of METHOD_EXPORTS) {
-                const mm = m.toLowerCase() as HttpMethod;
-                if (!handlers.has(mm)) handlers.set(mm, allNamed);
-            }
-        }
+		for (const m of METHOD_EXPORTS) {
+			const hNamed = addIfHandler(named, m);
+			if (hNamed) handlers.set(m.toLowerCase() as HttpMethod, hNamed);
+		}
+		// Support ALL fallback on named object
+		const allNamed = addIfHandler(named, "ALL");
+		if (allNamed) {
+			for (const m of METHOD_EXPORTS) {
+				const mm = m.toLowerCase() as HttpMethod;
+				if (!handlers.has(mm)) handlers.set(mm, allNamed);
+			}
+		}
 
-        // Merge default object handlers (do not override named ones)
-        if (defObj) {
-            for (const m of METHOD_EXPORTS) {
-                const h = addIfHandler(defObj, m);
-                if (h) {
-                    const mm = m.toLowerCase() as HttpMethod;
-                    if (!handlers.has(mm)) handlers.set(mm, h);
-                }
-            }
-            const allDef = addIfHandler(defObj, "ALL");
-            if (allDef) {
-                for (const m of METHOD_EXPORTS) {
-                    const mm = m.toLowerCase() as HttpMethod;
-                    if (!handlers.has(mm)) handlers.set(mm, allDef);
-                }
-            }
-        }
+		// Merge default object handlers (do not override named ones)
+		if (defObj) {
+			for (const m of METHOD_EXPORTS) {
+				const h = addIfHandler(defObj, m);
+				if (h) {
+					const mm = m.toLowerCase() as HttpMethod;
+					if (!handlers.has(mm)) handlers.set(mm, h);
+				}
+			}
+			const allDef = addIfHandler(defObj, "ALL");
+			if (allDef) {
+				for (const m of METHOD_EXPORTS) {
+					const mm = m.toLowerCase() as HttpMethod;
+					if (!handlers.has(mm)) handlers.set(mm, allDef);
+				}
+			}
+		}
 
-        // For TSX/JSX routes: allow default export function as ALL with text/html
-        const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
-        if (isJsxRoute && defFn) {
-            const wrapped = handle(defFn as (c: Parameters<Handler>[0]) => unknown | Promise<unknown>, file);
-            for (const m of METHOD_EXPORTS) {
-                const mm = m.toLowerCase() as HttpMethod;
-                if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);
-            }
-        }
+			// For TSX/JSX routes: allow default export function as ALL with text/html
+			const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
+			if (isJsxRoute && defFn) {
+				const wrapped = handle((_: any) => (defFn as () => unknown)(), undefined, file);
+				for (const m of METHOD_EXPORTS) {
+					const mm = m.toLowerCase() as HttpMethod;
+					if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);
+				}
+			}
 
-        // No handlers found: skip
-        if (!handlers.size) continue;
+		// No handlers found: skip
+		if (!handlers.size) continue;
 
-        // Process handlers to infer methods and handle OpenAPI registration
-        for (const [method, handler] of handlers) {
-            const exportName = method.toUpperCase();
+		// Process handlers to infer methods and handle OpenAPI registration
+		for (const [method, handler] of handlers) {
+			const exportName = method.toUpperCase();
 
 			type HandlerWithConfig = Handler & {
 				__routeConfig?: { openapi?: Parameters<typeof mergeOpenAPI>[1] };
 			};
-            const hdl = handler as unknown as HandlerWithConfig;
-            if (typeof hdl !== "function") continue;
+			const hdl = handler as unknown as HandlerWithConfig;
+			if (typeof hdl !== "function") continue;
 
 			// Get route config from handler metadata
 			const cfg = hdl.__routeConfig ?? {};
@@ -548,23 +556,27 @@ export async function mountFileRouter(
 			// Prefer the direct method when available, otherwise fall back to app.on().
 			const direct = (app as unknown as Record<string, unknown>)[method];
 			const chain = collectMiddlewareFor(file);
+			// Always set current file path per request for proper JSX/TSX detection
+			const setFilePathMw: MiddlewareHandler = async (_c, next) => {
+				setCurrentFilePath(file);
+				await next();
+			};
+			chain.push(setFilePathMw);
 			const layouts = collectLayoutsFor(file);
 			if (layouts.length) {
 				const setLayoutsMw: MiddlewareHandler = async (c, next) => {
 					setActiveLayouts(c, layouts);
-					// ensure the current file path is available during request handling
-					setCurrentFilePath(file);
 					await next();
 				};
 				chain.push(setLayoutsMw);
 			}
-			
+
 			// Register each path (multiple paths for optional segments)
-            for (const path of paths) {
-                if (typeof direct === "function") {
-                    // @ts-expect-error dynamic method indexing
-                    app[method](path, ...chain, handler);
-                } else {
+			for (const path of paths) {
+				if (typeof direct === "function") {
+					// @ts-expect-error dynamic method indexing
+					app[method](path, ...chain, handler);
+				} else {
 					// Use generic registrar as a robust fallback
 					// Hono expects the HTTP verb in uppercase for app.on()
 					(
@@ -574,7 +586,7 @@ export async function mountFileRouter(
 					).on(
 						method.toUpperCase(),
 						path,
-					...(chain as unknown as Handler[]),
+						...(chain as unknown as Handler[]),
 						hdl as unknown as Handler,
 					);
 				}

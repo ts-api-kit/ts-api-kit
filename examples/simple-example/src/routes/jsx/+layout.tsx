@@ -1,15 +1,14 @@
-export default function Layout({ children }: { children: string }) {
-  console.log("Layout", children);
+export default function Layout({ children }: { children: JSX.Element }) {
   return (
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Exemplo com Layout</title>
+        <title>Example with Layout</title>
       </head>
       <body>
         <header>
-          <h1>Layout Padrão</h1>
+          <h1>Default Layout</h1>
         </header>
         <main>{children}</main>
       </body>
