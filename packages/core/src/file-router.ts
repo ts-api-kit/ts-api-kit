@@ -19,6 +19,7 @@ import { createLogger, type Logger, setLogLevel } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
 import { toArray } from "./utils.ts";
+import { configToMiddleware, type DirConfig } from "./config.ts";
 
 function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
 	for (const n of names) {
@@ -90,6 +91,8 @@ export interface FileRouterOptions {
 	 */
 	logLevel?: "debug" | "info" | "warn" | "error" | "silent";
 	silent?: boolean;
+  /** Glob patterns to find per-directory +config files. */
+  configGlobs?: string[];
 }
 
 // HTTP method exports that we can infer from
@@ -118,6 +121,12 @@ const DEFAULT_MW_GLOBS = [
 	"**/+middleware.tsx",
 	"**/+middleware.js",
 	"**/+middleware.jsx",
+];
+const DEFAULT_CONFIG_GLOBS = [
+    "**/+config.ts",
+    "**/+config.tsx",
+    "**/+config.js",
+    "**/+config.jsx",
 ];
 const DEFAULT_ERROR_GLOBS = [
 	"**/+error.ts",
@@ -164,6 +173,7 @@ export async function mountFileRouter(
 	const relp = (p: string) => relPath(routesDir, p);
 	const routeGlobs = opts.routeGlobs ?? DEFAULT_ROUTE_GLOBS;
 	const mwGlobs = opts.middlewareGlobs ?? DEFAULT_MW_GLOBS;
+	const cfgGlobs = opts.configGlobs ?? DEFAULT_CONFIG_GLOBS;
 
 	log.debug("Routes directory:", routesDir);
 	log.debug("Route globs:", routeGlobs);
@@ -190,10 +200,10 @@ export async function mountFileRouter(
 		dot: false,
 	});
 
-	log.debug("Found middleware files:", mwFiles);
-	const rel = (p: string) =>
-		p.replace(`${routesDir}\\`, "/").replace(`${routesDir}/`, "");
+    log.debug("Found middleware files:", mwFiles);
 	const mwsByDir = new Map<string, MiddlewareHandler[]>();
+	// Keep track of directories that provide +config for possible OPTIONS preflights
+	const cfgPreflights: Array<{ base: string; dir: string; file: string }> = [];
 	for (const file of sortByDepthAsc(mwFiles)) {
 		const dir = dirname(file);
 		const modUrl = toModuleUrl(file);
@@ -231,6 +241,36 @@ export async function mountFileRouter(
 			log.info(`middleware ${hono} <- ${relp(file)} (${list.length})`);
 		} catch {
 			// best-effort logging only
+		}
+	}
+
+	// Discover +config.ts files and build config-derived middleware
+	const cfgFiles = await fg(cfgGlobs, {
+		cwd: routesDir,
+		absolute: true,
+		dot: false,
+	});
+	log.debug("Found config files:", cfgFiles);
+	for (const file of sortByDepthAsc(cfgFiles)) {
+		const dir = dirname(file);
+		const modUrl = toModuleUrl(file);
+		const mod = (await safeDynamicImport<Record<string, unknown>>(modUrl)) || {};
+		const cfg = (mod["config"] ?? mod["CONFIG"] ?? mod["default"]) as unknown as DirConfig | undefined;
+		if (!cfg || typeof cfg !== "object") continue;
+
+		const built = configToMiddleware(cfg);
+		if (!built.length) continue;
+		const acc = mwsByDir.get(dir) ?? [];
+		acc.push(...built);
+		mwsByDir.set(dir, acc);
+
+		try {
+			const { hono } = derivePathsFromFile(join(dir, "+route.ts"));
+			const keys = Object.keys(cfg).join(", ");
+			log.info(`config ${hono} <- ${relp(file)} (${keys || "no-opts"})`);
+			cfgPreflights.push({ base: hono, dir, file });
+		} catch {
+			// noop
 		}
 	}
 
@@ -316,6 +356,21 @@ export async function mountFileRouter(
 		for (let i = stack.length - 1; i >= 0; i--) chain.push(...stack[i]);
 		return chain;
 	};
+
+	// Register OPTIONS preflights to ensure CORS middleware runs for preflight requests
+	for (const { base, dir } of cfgPreflights) {
+		const chain = collectMiddlewareFor(join(dir, "+route.ts"));
+		if (!chain.length) continue;
+		const basePath = base === "/" ? "/" : base;
+		const starPath = base === "/" ? "/:__rest{.*}" : `${base}/:__rest{.*}`;
+		const noop: Handler = () => new Response(null, { status: 204 });
+		(
+			app as unknown as { on: (m: string, p: string, ...h: Handler[]) => void }
+		).on("OPTIONS", basePath, ...(chain as unknown as Handler[]), noop);
+		(
+			app as unknown as { on: (m: string, p: string, ...h: Handler[]) => void }
+		).on("OPTIONS", starPath, ...(chain as unknown as Handler[]), noop);
+	}
 	let routesMounted = 0;
 	for (const file of sortByDepthDesc(routeFiles)) {
 		const modUrl = toModuleUrl(file);
