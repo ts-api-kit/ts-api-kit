@@ -1,41 +1,26 @@
-import { handle } from "@ts-api-kit/core";
-import { response } from "@ts-api-kit/core/openapi";
+import { handle, response } from "@ts-api-kit/core";
+import * as v from "valibot";
 
-interface User {
-	id: number;
-	name: string;
-	email: string;
-	parent?: User;
-}
-
-interface HelloWorldResponse {
-	user: User;
-	email: string;
-}
-
-type Test = Omit<HelloWorldResponse, "email">;
-
-/**
- * @summary Get user
- * @description Get a user by id
- * @tags users
- */
 export const GET = handle(
-	{
-		openapi: {
-			responses: {
-				200: response.of<Test>(),
-			},
-		},
-	},
-	({ response }) => {
-		return response.ok({
-			user: {
-				id: 1,
-				name: "John Doe",
-				email: "john.doe@example.com",
-				parent: { id: 2, name: "Jane Doe", email: "jane.doe@example.com" },
-			},
-		});
+  {
+    openapi: {
+      request: {
+        params: v.object({
+          id: v.pipe(v.string(), v.transform(Number), v.number()),
+        }),
+      },
+      responses: {
+        200: response.of<{ id: number; name: string; email: string }>(),
+      },
+    },
+  },
+  async ({ params, response }) => {
+    const id = params.id;
+    const user = {
+      id,
+      name: `User ${id}`,
+      email: `user${id}@example.com`,
+    };
+    return response.ok(user);
   }
 );
