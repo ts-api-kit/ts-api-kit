@@ -2,7 +2,7 @@
   "name": "simple-example",
   "private": true,
   "type": "module",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "displayName": "Simple Example",
   "description": "Exemplo simples de uso do TS API Core com roteamento e validação.",
   "openapi": {
