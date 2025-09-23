@@ -1240,16 +1240,16 @@ export async function generateOpenAPI(
 		// Simple OpenAPI spec
 		const openapiSpec: {
 			openapi: string;
-			info: { title: string; version: string; description: string };
+			info?: { title?: string; version?: string; description?: string };
 			paths: Record<string, OperationMap>;
 			components: { schemas: Record<string, unknown> };
 		} = {
 			openapi: "3.1.0",
-			info: {
-				title: "{{pkg.displayName}}",
-				version: "{{pkg.version}}",
-				description: "{{pkg.description}}",
-			},
+			// info: {
+			// 	// title: "{{pkg.displayName}}",
+			// 	// version: "{{pkg.version}}",
+			// 	// description: "{{pkg.description}}",
+			// },
 			paths: {},
 			components: {
 				schemas: {},
@@ -1300,7 +1300,7 @@ export async function generateOpenAPI(
 			const operations = processRouteFile(sourceFile, checker);
 
 			if (Object.keys(operations).length > 0) {
-				openapiSpec.paths[openapiPath] = operations;
+				openapiSpec.paths[openapiPath] ??= operations;
 				log.debug(`Added operations for path: ${openapiPath}`);
 			} else {
 				log.debug(`No operations found for path: ${openapiPath}`);
