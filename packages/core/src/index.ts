@@ -10,6 +10,7 @@
  * @module
  */
 
+export * from "./config.ts";
 export * from "./file-router.ts";
 export { mountFileRouter } from "./file-router.ts";
 export * from "./hooks.ts";
@@ -20,7 +21,6 @@ export * from "./openapi/presets.ts";
 export * from "./openapi/registry.ts";
 export * from "./server.ts";
 export { default as Server } from "./server.ts";
-export * from "./config.ts";
 
 import { generateOpenAPI } from "./openapi/generator/index.ts";
 import {

@@ -1323,34 +1323,14 @@ export function handle<T extends RouteSpec = RouteSpec>(
 		// register(openapi);
 	}
 
-	// Create handler and attach metadata
+	// Create handler and attach metadata. Do not serialize here — leave it to createHandler
 	const h = createHandler(spec, async (context) => {
 		const responseTools = createResponseTools<NonNullable<T>>();
-		// Create context with response tools included
 		const fullContext = {
 			...context,
 			response: responseTools,
 		} as HandlerContext<NonNullable<T>>;
-
-		const result = await handler(fullContext);
-
-		// If result is already a Response, return it directly
-		if (result instanceof Response) {
-			return result;
-		}
-
-		// // Check if current file is JSX/TSX - if so, always treat as HTML
-		const currentFile = getCurrentFilePath();
-		const isJSXFile =
-			currentFile &&
-			(currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
-
-		if (isJSXFile) {
-			return jsx(result);
-		}
-
-		// Otherwise, wrap in json() for automatic serialization
-		return json(result);
+		return await handler(fullContext);
 	});
 
 	(h as unknown as { __routeConfig: T }).__routeConfig = spec ?? ({} as T);

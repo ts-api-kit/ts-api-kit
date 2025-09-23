@@ -141,6 +141,7 @@ export const PUT = handle(
 TS API Kit supports advanced routing patterns including optional segments and regex validation:
 
 #### Optional segments
+
 Use double brackets `[[...]]` to create optional route segments:
 
 ```ts
@@ -154,6 +155,7 @@ export const GET = handle(async (c) => {
 This creates routes for both `/` and `/:locale` where the locale parameter is optional.
 
 #### Regex patterns
+
 Add regex validation directly in the route segment:
 
 ```ts
@@ -175,6 +177,7 @@ export const GET = handle(
 This ensures only numeric IDs are accepted (e.g., `/users/123` but not `/users/abc`).
 
 #### Optional catch-all routes
+
 Combine optional segments with catch-all patterns:
 
 ```ts
@@ -381,6 +384,7 @@ export default {
 ```
 
 Notes:
+
 - CORS is header-based and handles preflight (OPTIONS 204).
 - Body limit uses `Content-Length` best-effort (does not stream-measure body).
 - Timeout is soft; work may continue server-side, but the client receives 504.
