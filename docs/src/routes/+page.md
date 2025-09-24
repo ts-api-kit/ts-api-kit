@@ -1,109 +1,101 @@
 ---
-title: "TS API Core"
-description: "Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot."
+title: "TS API Kit"
+description: "Type-safe APIs on top of Hono with file-based routing, validation, and instant OpenAPI."
 heroImage: /sveltepress@3x.png
-tagline: A simple, easy to use content centered site build tool with the full power of Sveltekit.
+tagline: Build delightful TypeScript APIs with file-based routing and instant OpenAPI.
 actions:
-  - label: Read the docs
+  - label: Start building
     type: primary
-    to: getting-started/installation
-  - label: View on github
-    type: primary
-    to: https://github.com/devzolo/ts-api-core
+    to: getting-started/quick-start
+  - label: Explore on GitHub
+    type: secondary
+    to: https://github.com/ts-api-kit/ts-api-kit
     external: true
 features:
-  - title: File-based Routing
-    description: Organize suas rotas como arquivos para uma estrutura clara e intuitiva
-  - title: Schema Validation
-    description: Validação automática de dados com Valibot para type-safety completo
-  - title: OpenAPI Generation
-    description: Geração automática de documentação OpenAPI a partir das suas rotas
-  - title: TypeScript Native
-    description: Suporte completo ao TypeScript com inferência de tipos automática
-  - title: Hono Powered
-    description: Baseado no Hono para performance e simplicidade máxima
-  - title: SvelteKit Integration
-    description: Geração automática de Remote Functions para integração com SvelteKit
+  - title: File-first routing
+    description: Mirror your filesystem with dynamic, optional, and regex segments out of the box.
+  - title: Runtime validation
+    description: Use Valibot or Zod schemas to catch mistakes before they reach your handlers.
+  - title: Instant OpenAPI
+    description: Serve /openapi.json and /docs with zero configuration, or emit static specs in CI.
+  - title: Typed responses
+    description: Built-in helpers keep every status code and payload aligned with your contracts.
+  - title: Scoped configuration
+    description: +config.ts files add CORS, timeouts, auth flags, and rate limit hints per folder.
+  - title: Hono performance
+    description: Built on Hono and ready for Node, Bun, and Deno without rewriting your handlers.
 ---
 
-<!--
-Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot.
+TS API Kit helps you build and maintain HTTP APIs without trading off ergonomics, type safety, or observability. Bring your favourite validator, keep routes as files, and ship with consistent OpenAPI docs from day one.
 
-## 🚀 Características
+## Why TS API Kit
 
-- **Roteamento por arquivos** - Organize suas rotas como arquivos
-- **Validação de schemas** - Validação automática com Valibot
-- **TypeScript nativo** - Suporte completo ao TypeScript
-- **Baseado no Hono** - Performance e simplicidade
-- **Middlewares** - Sistema de middlewares flexível
-- **Auto-documentação** - Schemas como documentação
-- **OpenAPI Generation** - Geração automática de especificações OpenAPI
-- **SvelteKit Integration** - Geração de Remote Functions para SvelteKit
+- Think in folders: every route, layout, middleware, error handler, and config lives next to the code it affects.
+- Keep validation, types, and docs in sync through a single source of truth.
+- Scale gradually with scoped middlewares, OpenAPI overrides, and per-folder configuration.
+- Deploy anywhere Hono runs: Node, Bun, Deno, Cloudflare Workers, and edge runtimes.
 
-## 📦 Pacotes
+## Five Minute Preview
 
-### ts-api-core
-
-O pacote principal que fornece o servidor, roteamento por arquivos e validação de schemas.
-
-### ts-api-compiler
-
-Plugin TypeScript para gerar automaticamente arquivos OpenAPI.json a partir de rotas TypeScript.
-
-### openapi-to-remote
-
-Ferramenta para gerar Remote Functions do SvelteKit a partir de especificações OpenAPI.
-
-## 🎯 Exemplo Rápido
-
-```typescript
+```ts
 // src/routes/+route.ts
-import { get, json } from "@ts-api-kit/core";
+import { handle, response } from "@ts-api-kit/core";
 import * as v from "valibot";
 
-export default {
-  GET: get({
-    query: v.object({
-      name: v.optional(v.string()),
-    }),
-  }, ({ query }) => {
-    return json({
-      message: `Hello ${query.name || 'World'}!`,
-      timestamp: new Date().toISOString(),
-    });
-  }),
+export const GET = handle(
+  {
+    openapi: {
+      summary: "Say hello",
+      request: {
+        query: v.object({
+          name: v.optional(v.string()),
+        }),
+      },
+      responses: {
+        200: response.of<{ message: string }>(),
+      },
+    },
+  },
+  ({ query, response }) => {
+    return response.ok({ message: `Hello ${query.name ?? "world"}!` });
+  }
+);
+```
+
+Add a `+config.ts` to the same folder when you need CORS, body limits, or timeouts:
+
+```ts
+// src/routes/+config.ts
+import type { DirConfig } from "@ts-api-kit/core";
+
+const config: DirConfig = {
+  cors: { origin: "https://app.example.com", credentials: true },
+  timeout: { ms: 5_000, message: "Upstream timed out" },
+  rateLimit: { windowMs: 60_000, max: 120 },
 };
+
+export default config;
 ```
 
-## 🛠️ Instalação
+Run `serve()` during development and you instantly get `/openapi.json` and `/docs` powered by Scalar.
 
-```bash
-npm install ts-api-core
-```
+## What You Get
 
-## 📚 Documentação
+- Battle-tested file router with support for groups, optional segments, and regex captures.
+- StandardSchema support, so Valibot and Zod work without glue code.
+- Lazy OpenAPI registration, response markers, and typed helpers for every status code.
+- Scoped `+middleware.ts`, `+error.ts`, and `+not-found.ts` files to shape each subtree.
+- A zero-config Node loader for `.ts` and `.tsx` routes plus JSX support via `@kitajs/html`.
+- Environment-aware logging with `TS_API_KIT_LOG_LEVEL` or `DEBUG`.
 
-Explore nossa documentação completa para aprender como usar todos os recursos do TS API Core:
+## Packages
 
-- [Instalação](/getting-started/installation) - Como instalar e configurar
-- [Quick Start](/getting-started/quick-start) - Primeiros passos
-- [File-based Routing](/guides/file-based-routing) - Sistema de roteamento
-- [Schema Validation](/guides/schema-validation) - Validação com Valibot
-- [OpenAPI Generation](/guides/openapi-generation) - Documentação automática
-- [Middleware](/guides/middleware) - Sistema de middlewares
+- [@ts-api-kit/core](/packages/ts-api-core) &mdash; runtime, router, server, and response helpers.
+- [@ts-api-kit/compiler](/packages/ts-api-compiler) &mdash; CLI and programmatic OpenAPI generator.
+- [openapi-to-remote](/packages/openapi-to-remote) &mdash; SvelteKit Remote Functions generator (work in progress).
 
-## 🌟 Exemplos
+## Next Steps
 
-Veja exemplos práticos de uso:
-
-- [Simple Example](/examples/simple-example) - Exemplo básico
-- [Frontend Example](/examples/frontend-example) - Integração com frontend
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Veja nosso [repositório no GitHub](https://github.com/devzolo/ts-api-core) para mais informações.
-
-## 📄 Licença
-
-MIT License - veja o arquivo [LICENSE](https://github.com/devzolo/ts-api-core/blob/main/LICENSE) para detalhes.
--->
+- [Install the tooling](/getting-started/installation)
+- [Ship your first route](/getting-started/quick-start)
+- Dive into [file-based routing](/guides/file-based-routing) or [OpenAPI workflows](/guides/openapi-generation)

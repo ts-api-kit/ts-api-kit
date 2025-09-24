@@ -31,35 +31,77 @@ const config = defineConfig({
             {
               title: "Getting Started",
               items: [
-                { title: "Introduction", to: "/" },
-                { title: "Installation", to: "/getting-started/installation" },
-                { title: "Quick Start", to: "/getting-started/quick-start" },
+                {
+                  title: "Introduction",
+                  to: "/",
+                },
+                {
+                  title: "Installation",
+                  to: "/getting-started/installation",
+                },
+                {
+                  title: "Quick Start",
+                  to: "/getting-started/quick-start",
+                },
               ],
             },
             {
               title: "Packages",
               items: [
-                { title: "Overview", to: "/packages" },
-                { title: "ts-api-core", to: "/packages/ts-api-core" },
-                { title: "ts-api-compiler", to: "/packages/ts-api-compiler" },
-                { title: "openapi-to-remote", to: "/packages/openapi-to-remote" },
+                {
+                  title: "Overview",
+                  to: "/packages",
+                },
+                {
+                  title: "ts-api-core",
+                  to: "/packages/ts-api-core",
+                },
+                {
+                  title: "ts-api-compiler",
+                  to: "/packages/ts-api-compiler",
+                },
+                {
+                  title: "openapi-to-remote",
+                  to: "/packages/openapi-to-remote",
+                },
               ],
             },
             {
               title: "Guides",
               items: [
-                { title: "File-based Routing", to: "/guides/file-based-routing" },
-                { title: "Schema Validation", to: "/guides/schema-validation" },
-                { title: "OpenAPI Generation", to: "/guides/openapi-generation" },
-                { title: "Middleware", to: "/guides/middleware" },
+                {
+                  title: "File-based Routing",
+                  to: "/guides/file-based-routing",
+                },
+                {
+                  title: "Schema Validation",
+                  to: "/guides/schema-validation",
+                },
+                {
+                  title: "OpenAPI Generation",
+                  to: "/guides/openapi-generation",
+                },
+                {
+                  title: "Middleware",
+                  to: "/guides/middleware",
+                },
               ],
             },
             {
               title: "Examples",
               items: [
-                { title: "Overview", to: "/examples" },
-                { title: "Simple Example", to: "/examples/simple-example" },
-                { title: "Frontend Example", to: "/examples/frontend-example" },
+                {
+                  title: "Overview",
+                  to: "/examples",
+                },
+                {
+                  title: "Simple Example",
+                  to: "/examples/simple-example",
+                },
+                {
+                  title: "Frontend Example",
+                  to: "/examples/frontend-example",
+                },
               ],
             },
           ],
