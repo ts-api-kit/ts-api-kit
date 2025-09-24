@@ -105,4 +105,3 @@ export const serve = async (options: ServeOptions = {}): Promise<void> => {
 	}
 	server.start(port);
 };
-
