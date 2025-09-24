@@ -53,7 +53,7 @@ interface ServeOptions {
 		  };
 }
 
-export const serve = async (options: ServeOptions = {}) => {
+export const serve = async (options: ServeOptions = {}): Promise<void> => {
 	const port = options.port ?? 3000;
 	const routesDir = `./src/routes`;
 	const server = new ApiServer();
@@ -105,3 +105,4 @@ export const serve = async (options: ServeOptions = {}) => {
 	}
 	server.start(port);
 };
+

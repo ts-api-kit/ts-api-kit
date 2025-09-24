@@ -69,7 +69,8 @@
     "@ts-api-kit/compiler": "workspace:*",
     "@ts-api-kit/core": "workspace:*",
     "hono": "^4.9.8",
-    "valibot": "^1.1.0"
+    "valibot": "^1.1.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",

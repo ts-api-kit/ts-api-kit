@@ -30,13 +30,21 @@ export const headersOf = <T>(v?: Partial<T>): HeadersMarker<T> =>
 	(v ?? ({} as T)) as HeadersMarker<T>;
 
 // Facades to preserve DX: response.of(...) and headers.of(...)
-export const response = {
-	of: responseOf,
-} as const;
+type ResponseFacade = Readonly<{
+	of: typeof responseOf;
+}>;
 
-export const headers = {
+export const response: ResponseFacade = {
+	of: responseOf,
+};
+
+type HeadersFacade = Readonly<{
+	of: typeof headersOf;
+}>;
+
+export const headers: HeadersFacade = {
 	of: headersOf,
-} as const;
+};
 
 // Canonical error object for API responses.
 export type ApiError = { code: string; message: string; details?: unknown };

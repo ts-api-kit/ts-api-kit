@@ -16,14 +16,13 @@ import { serve } from "@hono/node-server";
 import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-// Type-only Zod imports (optional peer dep)
-import type { ZodTypeAny } from "zod";
-import type { z } from "zod";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
 import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
+// Type-only Zod imports (optional peer dep)
+import type { ZodTypeAny, z } from "zod";
 import { mountFileRouter } from "./file-router.ts";
 import { resolveErrorForPath, resolveNotFoundForPath } from "./hooks.ts";
 import type { OpenAPIBuilder } from "./openapi/builder.ts";
@@ -90,7 +89,9 @@ export const error = (
 let currentContext: Context | null = null;
 let currentFilePath: string | null = null;
 // Track active layout chain per request context
-export type LayoutComponent = (props: { children: unknown }) => unknown | Promise<unknown>;
+export type LayoutComponent = (props: {
+	children: unknown;
+}) => unknown | Promise<unknown>;
 const layoutsByContext = new WeakMap<Context, LayoutComponent[]>();
 
 /**
@@ -100,7 +101,7 @@ const layoutsByContext = new WeakMap<Context, LayoutComponent[]>();
  * @param c - The Hono context to set as current
  */
 export const setRequestContext = (c: Context): void => {
-    currentContext = c;
+	currentContext = c;
 };
 
 /**
@@ -110,23 +111,26 @@ export const setRequestContext = (c: Context): void => {
  * @param filePath - The file path to set as current
  */
 export const setCurrentFilePath = (filePath: string): void => {
-    currentFilePath = filePath;
+	currentFilePath = filePath;
 };
 
 /**
  * Associates an ordered list of layout components with the given request context.
  * The list should be ordered from root-most to leaf-most.
  */
-export const setActiveLayouts = (c: Context, layouts: LayoutComponent[]): void => {
-    layoutsByContext.set(c, layouts);
+export const setActiveLayouts = (
+	c: Context,
+	layouts: LayoutComponent[],
+): void => {
+	layoutsByContext.set(c, layouts);
 };
 
 /**
  * Gets active layouts for the current request context (root → leaf order).
  */
 const getActiveLayouts = (): LayoutComponent[] => {
-    if (!currentContext) return [];
-    return layoutsByContext.get(currentContext) ?? [];
+	if (!currentContext) return [];
+	return layoutsByContext.get(currentContext) ?? [];
 };
 
 /**
@@ -371,7 +375,7 @@ export interface ResponseTools<T extends RouteSpec> {
  * ```
  */
 export const jsx = async (element: unknown): Promise<Response> => {
-    let html: string;
+	let html: string;
 
 	if (typeof element === "string") {
 		html = element;
@@ -382,16 +386,16 @@ export const jsx = async (element: unknown): Promise<Response> => {
 		html = String(element);
 	}
 
-    return new Response(html, {
-        headers: { "Content-Type": "text/html" },
-    });
+	return new Response(html, {
+		headers: { "Content-Type": "text/html" },
+	});
 };
 
 // Converts an unknown value (string | Promise<string> | JSX-like) to an HTML string
 const toHtmlString = async (element: unknown): Promise<string> => {
-    if (typeof element === "string") return element;
-    if (element instanceof Promise) return String(await element);
-    return String(element);
+	if (typeof element === "string") return element;
+	if (element instanceof Promise) return String(await element);
+	return String(element);
 };
 
 // Helper functions to reduce code duplication
@@ -688,35 +692,35 @@ function isStandard(s: unknown): s is AnySchema {
 
 // Zod runtime detection (optional)
 function isZodSchema(s: unknown): s is ZodTypeAny {
-    return (
-        !!s &&
-        typeof s === "object" &&
-        typeof (s as { safeParse?: unknown }).safeParse === "function" &&
-        typeof (s as { parse?: unknown }).parse === "function" &&
-        "_def" in (s as object)
-    );
+	return (
+		!!s &&
+		typeof s === "object" &&
+		typeof (s as { safeParse?: unknown }).safeParse === "function" &&
+		typeof (s as { parse?: unknown }).parse === "function" &&
+		"_def" in (s as object)
+	);
 }
 
 // Adapt a Zod schema to StandardSchemaV1 to reuse common validation
 function zodToStandard<S extends ZodTypeAny>(
-    schema: S,
-    vendor = "hono-file-router",
+	schema: S,
+	vendor = "hono-file-router",
 ): StandardSchemaV1<z.input<S>, z.output<S>> {
-    return {
-        "~standard": {
-            version: 1,
-            vendor,
-            validate: (value: unknown) => {
-                const r = (schema as ZodTypeAny).safeParse(value) as {
-                    success: boolean;
-                    data?: unknown;
-                    error?: { issues?: unknown[] };
-                };
-                if (r.success) return { value: r.data } as const;
-                return { issues: (r.error?.issues ?? []) as unknown[] } as const;
-            },
-        },
-    } as unknown as StandardSchemaV1<z.input<S>, z.output<S>>;
+	return {
+		"~standard": {
+			version: 1,
+			vendor,
+			validate: (value: unknown) => {
+				const r = (schema as ZodTypeAny).safeParse(value) as {
+					success: boolean;
+					data?: unknown;
+					error?: { issues?: unknown[] };
+				};
+				if (r.success) return { value: r.data } as const;
+				return { issues: (r.error?.issues ?? []) as unknown[] } as const;
+			},
+		},
+	} as unknown as StandardSchemaV1<z.input<S>, z.output<S>>;
 }
 
 // DX: stable issue shape
@@ -776,7 +780,10 @@ async function validatePart<S extends AnySchema>(
 	const effective = isStandard(schema)
 		? schema
 		: isZodSchema(schema)
-			? (zodToStandard(schema as ZodTypeAny, `hono-file-router:${where}`) as unknown as AnySchema)
+			? (zodToStandard(
+					schema as ZodTypeAny,
+					`hono-file-router:${where}`,
+				) as unknown as AnySchema)
 			: schema;
 
 	if (!isStandard(effective)) {
@@ -785,7 +792,11 @@ async function validatePart<S extends AnySchema>(
 			issues: {
 				location: where,
 				issues: [
-					{ message: "Schema must implement StandardSchemaV1 or be a Zod schema", path: [] },
+					{
+						message:
+							"Schema must implement StandardSchemaV1 or be a Zod schema",
+						path: [],
+					},
 				],
 			},
 		};
@@ -837,7 +848,10 @@ export function toStandardSchema<S extends AnySchema>(
 	}
 	// Zod -> Standard adapter
 	if (isZodSchema(schema)) {
-		return zodToStandard(schema as ZodTypeAny, vendor) as unknown as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
+		return zodToStandard(
+			schema as ZodTypeAny,
+			vendor,
+		) as unknown as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
 	}
 	throw new Error("Schema must implement StandardSchemaV1 or be a Zod schema");
 }
@@ -905,27 +919,33 @@ type EffectiveSchemas<T extends RouteSpec> = {
  * Strongly-typed context passed to route handlers after validation.
  */
 export type HandlerContext<T extends RouteSpec> = {
-    params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<unknown, unknown>
-        ? InferOutput<EffectiveSchemas<T>["params"]>
-        : EffectiveSchemas<T>["params"] extends ZodTypeAny
-            ? z.output<EffectiveSchemas<T>["params"]>
-            : Record<string, unknown>;
-    query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
-        ? InferOutput<EffectiveSchemas<T>["query"]>
-        : EffectiveSchemas<T>["query"] extends ZodTypeAny
-            ? z.output<EffectiveSchemas<T>["query"]>
-            : Record<string, unknown>;
-    headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<unknown, unknown>
-        ? InferOutput<EffectiveSchemas<T>["headers"]>
-        : EffectiveSchemas<T>["headers"] extends ZodTypeAny
-            ? z.output<EffectiveSchemas<T>["headers"]>
-            : Record<string, string>;
-    body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
-        ? InferOutput<EffectiveSchemas<T>["body"]>
-        : EffectiveSchemas<T>["body"] extends ZodTypeAny
-            ? z.output<EffectiveSchemas<T>["body"]>
-            : unknown;
-    response: ResponseTools<T>;
+	params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<
+		unknown,
+		unknown
+	>
+		? InferOutput<EffectiveSchemas<T>["params"]>
+		: EffectiveSchemas<T>["params"] extends ZodTypeAny
+			? z.output<EffectiveSchemas<T>["params"]>
+			: Record<string, unknown>;
+	query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
+		? InferOutput<EffectiveSchemas<T>["query"]>
+		: EffectiveSchemas<T>["query"] extends ZodTypeAny
+			? z.output<EffectiveSchemas<T>["query"]>
+			: Record<string, unknown>;
+	headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<
+		unknown,
+		unknown
+	>
+		? InferOutput<EffectiveSchemas<T>["headers"]>
+		: EffectiveSchemas<T>["headers"] extends ZodTypeAny
+			? z.output<EffectiveSchemas<T>["headers"]>
+			: Record<string, string>;
+	body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
+		? InferOutput<EffectiveSchemas<T>["body"]>
+		: EffectiveSchemas<T>["body"] extends ZodTypeAny
+			? z.output<EffectiveSchemas<T>["body"]>
+			: unknown;
+	response: ResponseTools<T>;
 };
 
 /**
@@ -1039,15 +1059,15 @@ function extractSchemas(spec?: RouteSpec) {
  * @returns A function that can be mounted onto a Hono router
  */
 export function createHandler<T extends RouteSpec>(
-    spec: T | undefined,
-    handler: (
-        context: HandlerContext<NonNullable<T>>,
-    ) => unknown | Promise<unknown>,
+	spec: T | undefined,
+	handler: (
+		context: HandlerContext<NonNullable<T>>,
+	) => unknown | Promise<unknown>,
 ): (c: Context) => Promise<Response> {
-    let registered = false;
-    return async (c: Context) => {
-        try {
-            setRequestContext(c);
+	let registered = false;
+	return async (c: Context) => {
+		try {
+			setRequestContext(c);
 
 			// Lazy registration: method + path of the Hono route
 			if (!registered && spec && (spec as WithOpenAPI).openapi) {
@@ -1119,86 +1139,87 @@ export function createHandler<T extends RouteSpec>(
 				);
 			}
 
-            const result = await handler({
-                params: P.value,
-                query: Q.value,
-                headers: H.value,
-                body: B.value,
-            } as HandlerContext<NonNullable<T>>);
+			const result = await handler({
+				params: P.value,
+				query: Q.value,
+				headers: H.value,
+				body: B.value,
+			} as HandlerContext<NonNullable<T>>);
 
-            if (result instanceof Response) return result;
+			if (result instanceof Response) return result;
 
-            // Extract optional { status, body } shape
-            let status = 200;
-            let body: unknown = result;
-            if (
-                body &&
-                typeof body === "object" &&
-                "status" in (body as Record<string, unknown>) &&
-                "body" in (body as Record<string, unknown>)
-            ) {
-                const r = body as { status?: unknown; body?: unknown };
-                status = typeof r.status === "number" ? r.status : Number(r.status) || 200;
-                body = r.body;
-            }
+			// Extract optional { status, body } shape
+			let status = 200;
+			let body: unknown = result;
+			if (
+				body &&
+				typeof body === "object" &&
+				"status" in (body as Record<string, unknown>) &&
+				"body" in (body as Record<string, unknown>)
+			) {
+				const r = body as { status?: unknown; body?: unknown };
+				status =
+					typeof r.status === "number" ? r.status : Number(r.status) || 200;
+				body = r.body;
+			}
 
-            // If there are active layouts, render through them and return HTML
-            const layouts = getActiveLayouts();
-            if (layouts.length) {
-                let composed: unknown = body;
-                // Apply layouts from leaf-most backwards: root → ... → leaf
-                for (let i = layouts.length - 1; i >= 0; i--) {
-                    composed = await layouts[i]({ children: composed });
-                }
-                const html = await toHtmlString(composed);
-                return createHtmlResponse(html, status);
-            }
+			// If there are active layouts, render through them and return HTML
+			const layouts = getActiveLayouts();
+			if (layouts.length) {
+				let composed: unknown = body;
+				// Apply layouts from leaf-most backwards: root → ... → leaf
+				for (let i = layouts.length - 1; i >= 0; i--) {
+					composed = await layouts[i]({ children: composed });
+				}
+				const html = await toHtmlString(composed);
+				return createHtmlResponse(html, status);
+			}
 
-            // Check if current file is JSX/TSX - if so, treat as HTML
-            const currentFile = getCurrentFilePath();
-            const isJSXFile =
-                currentFile &&
-                (currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
+			// Check if current file is JSX/TSX - if so, treat as HTML
+			const currentFile = getCurrentFilePath();
+			const isJSXFile =
+				currentFile &&
+				(currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
 
-            if (isJSXFile) {
-                const html = await toHtmlString(body);
-                return createHtmlResponse(html, status);
-            }
+			if (isJSXFile) {
+				const html = await toHtmlString(body);
+				return createHtmlResponse(html, status);
+			}
 
-            // Otherwise, default to JSON
-            return createJsonResponse(body, status);
-        } catch (err) {
-            // Allow scoped error handlers defined via +error.ts to render the error
-            try {
-                const scoped = resolveErrorForPath(c.req.path);
-                if (scoped) return await scoped(err, c);
-            } catch {
-                // ignore and fall through to default handling
-            }
-            if (err instanceof AppError) {
-                return createJsonResponse(
-                    {
-                        error: {
-                            code: "APP_ERROR",
-                            message: err.message,
-                            ...(err.meta ? { meta: err.meta } : {}),
-                        },
-                    },
-                    err.code,
-                );
-            }
-            return c.json(
-                { error: { code: "INTERNAL", message: "Internal Server Error" } },
-                500,
-            );
-        } finally {
-            // clear context and forget layouts for this request
-            if (currentContext) {
-                layoutsByContext.delete(currentContext);
-            }
-            currentContext = null;
-        }
-    };
+			// Otherwise, default to JSON
+			return createJsonResponse(body, status);
+		} catch (err) {
+			// Allow scoped error handlers defined via +error.ts to render the error
+			try {
+				const scoped = resolveErrorForPath(c.req.path);
+				if (scoped) return await scoped(err, c);
+			} catch {
+				// ignore and fall through to default handling
+			}
+			if (err instanceof AppError) {
+				return createJsonResponse(
+					{
+						error: {
+							code: "APP_ERROR",
+							message: err.message,
+							...(err.meta ? { meta: err.meta } : {}),
+						},
+					},
+					err.code,
+				);
+			}
+			return c.json(
+				{ error: { code: "INTERNAL", message: "Internal Server Error" } },
+				500,
+			);
+		} finally {
+			// clear context and forget layouts for this request
+			if (currentContext) {
+				layoutsByContext.delete(currentContext);
+			}
+			currentContext = null;
+		}
+	};
 }
 
 /**
