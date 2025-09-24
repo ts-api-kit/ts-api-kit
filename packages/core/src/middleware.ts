@@ -14,9 +14,9 @@ export type KitNext = Next;
  *   });
  */
 export function defineMiddleware(
-  ...mws: MiddlewareHandler[]
+	...mws: MiddlewareHandler[]
 ): MiddlewareHandler[] {
-  return mws;
+	return mws;
 }
 
 /**
@@ -25,39 +25,44 @@ export function defineMiddleware(
  * Example:
  *   export const USE = use(logger(), auth())
  */
-export const use: (...mws: MiddlewareHandler[]) => MiddlewareHandler[] = defineMiddleware;
+export const use: (...mws: MiddlewareHandler[]) => MiddlewareHandler[] =
+	defineMiddleware;
 
 export type NotFoundHandlerFn = (c: Context) => Response | Promise<Response>;
 
 export function handleNotFound(handler: NotFoundHandlerFn): NotFoundHandlerFn {
-  return (c: Context): ReturnType<NotFoundHandlerFn> => handler(c);
+	return (c: Context): ReturnType<NotFoundHandlerFn> => handler(c);
 }
 
-export type ErrorHandlerFn = (err: unknown, c: Context) => Response | Promise<Response>;
+export type ErrorHandlerFn = (
+	err: unknown,
+	c: Context,
+) => Response | Promise<Response>;
 
 export function handleError(handler: ErrorHandlerFn): ErrorHandlerFn {
-  return (err: unknown, c: Context): ReturnType<ErrorHandlerFn> => handler(err, c);
+	return (err: unknown, c: Context): ReturnType<ErrorHandlerFn> =>
+		handler(err, c);
 }
 
 /**
  * Small helper to compose multiple middleware functions.
  */
 export const composeMiddleware = (
-  ...mws: MiddlewareHandler[]
+	...mws: MiddlewareHandler[]
 ): MiddlewareHandler[] => mws;
 
 /**
  * Convenience factory: basic request logger middleware.
  */
 export function createLoggerMiddleware(): MiddlewareHandler {
-  return async (c, next) => {
-    const start = Date.now();
-    await next();
-    const duration = Date.now() - start;
-    const { method } = c.req;
-    const url = new URL(c.req.url);
-    const status = c.res?.status ?? 0;
-    // eslint-disable-next-line no-console
-    console.log(`${method} ${url.pathname} -> ${status} (${duration}ms)`);
-  };
+	return async (c, next) => {
+		const start = Date.now();
+		await next();
+		const duration = Date.now() - start;
+		const { method } = c.req;
+		const url = new URL(c.req.url);
+		const status = c.res?.status ?? 0;
+		// eslint-disable-next-line no-console
+		console.log(`${method} ${url.pathname} -> ${status} (${duration}ms)`);
+	};
 }
