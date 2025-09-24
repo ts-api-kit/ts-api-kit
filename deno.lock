@@ -6162,6 +6162,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@biomejs/biome@^2.2.2",
+        "npm:@changesets/changelog-github@~0.5.1",
         "npm:@changesets/cli@^2.27.8",
         "npm:@typescript/native-preview@7.0.0-dev.20250907.1",
         "npm:nx@21.4.1",
@@ -6252,7 +6253,8 @@
             "npm:hono@^4.9.8",
             "npm:pathe@^2.0.3",
             "npm:typescript@^5.6.2",
-            "npm:valibot@^1.1.0"
+            "npm:valibot@1",
+            "npm:zod@4"
           ]
         }
       }
