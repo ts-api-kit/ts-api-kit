@@ -1,11 +1,11 @@
 # TS API Kit — Core
 
-Core framework for APIs built on Hono with file‑based routing, Valibot validation, and automatic OpenAPI generation.
+Core framework for APIs built on Hono with file‑based routing, Valibot/Zod validation, and automatic OpenAPI generation.
 
 ## Features
 
 - 📁 File-based routing with zero boilerplate
-- ✅ Valibot schema validation (StandardSchema-compatible)
+- ✅ Valibot and Zod schema validation (via StandardSchema adapter)
 - 🧾 Auto-documented routes via OpenAPI + Scalar UI
 - 🧰 Native TypeScript DX and strong typing end-to-end
 - 🧩 Simple, composable middlewares
@@ -15,6 +15,8 @@ Core framework for APIs built on Hono with file‑based routing, Valibot validat
 
 ```bash
 npm install @ts-api-kit/core valibot
+# or, if you prefer Zod
+npm install @ts-api-kit/core zod
 ```
 
 ## Quick Start
@@ -44,6 +46,25 @@ export const GET = handle(
     openapi: {
       request: {
         query: v.object({ name: v.optional(v.string()) }),
+      },
+    },
+  },
+  ({ query }) => ({ message: `Hello ${query.name ?? "World"}!` })
+);
+```
+
+You can also use Zod — the kit will auto-detect and validate Zod schemas the same way:
+
+```ts
+// src/routes/greet/+route.ts
+import { handle } from "@ts-api-kit/core";
+import { z } from "zod";
+
+export const GET = handle(
+  {
+    openapi: {
+      request: {
+        query: z.object({ name: z.string().optional() }),
       },
     },
   },
@@ -330,7 +351,7 @@ serve({
 
 ## Validation & Types
 
-- Define `query`, `params`, `headers`, and `body` with Valibot.
+- Define `query`, `params`, `headers`, and `body` with Valibot or Zod.
 - `handle()` validates inputs and passes parsed values to your handler.
 - Response helpers are available via `context.response`:
   - `json`, `text`, `html`, `jsx`, `redirect`, `file`, `stream`.
