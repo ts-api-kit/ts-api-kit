@@ -1,481 +1,101 @@
 ---
-title: 'ts-api-compiler'
-description: 'Plugin TypeScript para gerar automaticamente arquivos OpenAPI.json a partir de rotas TypeScript.'
+title: "@ts-api-kit/compiler"
+description: "Generate OpenAPI 3.1 documents from your TS API Kit routes."
 ---
 
-Plugin TypeScript para gerar automaticamente arquivos OpenAPI.json a partir de rotas TypeScript.
+The compiler scans your `+route.ts` files, understands the validation schemas and OpenAPI metadata you declare, and produces a single OpenAPI document. Use it in CI, pre-commit hooks, or custom scripts.
 
-## Instalação
+## Installation
 
 ```bash
-npm install ts-api-compiler
+pnpm add -D @ts-api-kit/compiler
 ```
 
-## Funcionalidades
+The compiler expects `@ts-api-kit/core` to be installed in the same workspace so it can reuse shared utilities.
 
-- ✅ Detecção automática de arquivos de rota (`+route.ts`)
-- ✅ Extração de métodos HTTP (GET, POST, PUT, DELETE, etc.)
-- ✅ Geração de especificação OpenAPI 3.1.0
-- ✅ Suporte a parâmetros dinâmicos (`[id]` → `{id}`)
-- ✅ Integração com `tsc` via plugins
-- ✅ Suporte a schemas Valibot
-- ✅ Geração de componentes reutilizáveis
+## CLI Usage
 
-## Uso
+```bash
+pnpm exec @ts-api-kit/compiler generate-openapi \
+  --routes ./src/routes \
+  --project ./tsconfig.json \
+  --output ./openapi.json
+```
 
-### Método 1: Script NPM (Recomendado)
+### Key flags
 
-Adicione um script no seu `package.json`:
+| Flag | Description |
+|------|-------------|
+| `--routes` | Path to your routes directory (defaults to `./src/routes`). |
+| `--project` | Path to a `tsconfig.json` for type resolution. |
+| `--output` | File to write (defaults to `./openapi.json`). |
+| `--watch` | Re-run when routes change. |
+| `--silent` | Reduce log output. |
+| `--fail-on-warn` | Exit with status `1` when warnings occur (ideal for CI). |
 
-```ts
+Add a package script:
+
+```json
 {
   "scripts": {
-    "build:openapi": "tsc --build &#x26;&#x26; node --experimental-transform-types --no-warnings ../../packages/ts-api-compiler/src/simple-generator.ts --project=./tsconfig.json --output=./openapi.json"
+    "build:openapi": "pnpm exec @ts-api-kit/compiler generate-openapi --project ./tsconfig.json --output ./openapi.json"
   }
 }
 ```
 
-Execute:
+## Programmatic API
 
-```bash
-npm run build:openapi
-```
-
-### Método 2: Plugin TypeScript
-
-Configure o plugin no seu `tsconfig.json`:
+Use the API when you need more control (for example, multiple outputs or custom post-processing).
 
 ```ts
-{
-  "compilerOptions": {
-    "plugins": [
-      {
-        "transform": "../../packages/ts-api-compiler/src/ts-plugin-simple.ts",
-        "after": true
-      }
-    ]
-  }
-}
-```
+// scripts/openapi.ts
+import { generateOpenAPI } from "@ts-api-kit/compiler";
 
-Execute:
-
-```bash
-tsc
-```
-
-## Configuração
-
-### Opções do Plugin
-
-O plugin aceita as seguintes opções:
-
-```ts
-interface OpenAPIPluginOptions {
-  outputFile?: string;        // Caminho do arquivo de saída (padrão: "openapi.json")
-  title?: string;             // Título da API (padrão: "API Documentation")
-  version?: string;           // Versão da API (padrão: "1.0.0")
-  description?: string;       // Descrição da API
-  servers?: Array<{           // Servidores da API
-    url: string;
-    description?: string;
-  }>;
-}
-```
-
-### Estrutura de Rotas
-
-O plugin detecta automaticamente arquivos que terminam com `+route.ts` e extrai os métodos HTTP exportados:
-
-```typescript
-// src/routes/users/+route.ts
-export const GET = handle(/* ... */);
-export const POST = handle(/* ... */);
-export const PUT = handle(/* ... */);
-export const DELETE = handle(/* ... */);
-```
-
-## Exemplos de Uso
-
-### Rota Simples
-
-```typescript
-// src/routes/+route.ts
-import { get, json } from "@ts-api-kit/core";
-import * as v from "valibot";
-
-export default {
-  GET: get({
-    query: v.object({
-      name: v.optional(v.string()),
-    }),
-  }, ({ query }) => {
-    return json({
-      message: `Hello ${query.name || 'World'}!`,
-    });
-  }),
-};
-```
-
-**OpenAPI gerado:**
-
-```ts
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "API Documentation",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/": {
-      "get": {
-        "parameters": [
-          {
-            "name": "name",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### Rota com Parâmetros Dinâmicos
-
-```typescript
-// src/routes/users/[id]/+route.ts
-import { get, put, del, json } from "@ts-api-kit/core";
-import * as v from "valibot";
-
-const UserSchema = v.object({
-  id: v.number(),
-  name: v.string(),
-  email: v.pipe(v.string(), v.email()),
-  age: v.optional(v.number()),
-});
-
-export default {
-  GET: get({
-    params: v.object({
-      id: v.pipe(v.string(), v.transform(Number)),
-    }),
-  }, ({ params }) => {
-    return json({
-      user: {
-        id: params.id,
-        name: `User ${params.id}`,
-        email: `user${params.id}@example.com`,
-      },
-    });
-  }),
-
-  PUT: put({
-    params: v.object({
-      id: v.pipe(v.string(), v.transform(Number)),
-    }),
-    body: UserSchema,
-  }, ({ params, body }) => {
-    return json({
-      message: `User ${params.id} updated`,
-      user: body,
-    });
-  }),
-
-  DELETE: del({
-    params: v.object({
-      id: v.pipe(v.string(), v.transform(Number)),
-    }),
-  }, ({ params }) => {
-    return json({
-      message: `User ${params.id} deleted`,
-    });
-  }),
-};
-```
-
-**OpenAPI gerado:**
-
-```ts
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "API Documentation",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/users/{id}": {
-      "get": {
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/User"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "user": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "User": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string",
-            "format": "email"
-          },
-          "age": {
-            "type": "integer"
-          }
-        },
-        "required": ["id", "name", "email"]
-      }
-    }
-  }
-}
-```
-
-## Integração com CI/CD
-
-### GitHub Actions
-
-```yaml
-name: Generate OpenAPI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  generate-openapi:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run build:openapi
-      - name: Check for changes
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "OpenAPI spec has changed"
-            git diff
-          fi
-```
-
-### Pre-commit Hook
-
-```ts
-{
-  "husky": {
-    "hooks": {
-      "pre-commit": "npm run build:openapi &#x26;&#x26; git add openapi.json"
-    }
-  }
-}
-```
-
-## Configuração Avançada
-
-### Personalizando a Geração
-
-```typescript
-// scripts/generate-openapi.ts
-import { generateOpenAPI } from "ts-api-compiler";
-
-const options = {
-  outputFile: "./docs/openapi.json",
-  title: "My API",
+await generateOpenAPI({
+  routesDir: "./src/routes",
+  project: "./tsconfig.json",
+  outputFile: "./openapi.json",
+  title: "Acme API",
   version: "2.0.0",
-  description: "API documentation for my application",
+  description: "Generated from TS API Kit routes",
   servers: [
-    {
-      url: "https://api.example.com",
-      description: "Production server",
-    },
-    {
-      url: "https://staging-api.example.com",
-      description: "Staging server",
-    },
+    { url: "https://api.acme.dev", description: "Production" },
   ],
-};
-
-await generateOpenAPI("./src/routes", options);
+});
 ```
 
-### Filtros de Arquivos
+Options mirror the CLI flags, plus:
 
-```typescript
-// Configuração para ignorar certos arquivos
-const options = {
-  exclude: [
-    "**/test/**",
-    "**/*.test.ts",
-    "**/__tests__/**",
-  ],
-};
-```
+- `title`, `version`, `description`
+- `servers`, `tags`, `components`
+- `transform(document)` callback to adjust the JSON before writing
 
-## Solução de Problemas
+## Recommended Workflow
 
-### Erro: "Cannot find module"
+1. Add `"build:openapi"` to your package scripts.
+2. Run it in CI and fail the pipeline on warnings: `pnpm build:openapi --fail-on-warn`.
+3. Commit the generated `openapi.json` (or publish it elsewhere) so downstream consumers can rely on it.
 
-Certifique-se de que o caminho para o plugin está correto no `tsconfig.json`:
+## Understanding Compiler Warnings
 
-```ts
-{
-  "compilerOptions": {
-    "plugins": [
-      {
-        "transform": "./node_modules/ts-api-compiler/src/ts-plugin-simple.ts",
-        "after": true
-      }
-    ]
-  }
-}
-```
+Warnings highlight mismatches the runtime may tolerate but your documentation should address:
 
-### Erro: "Type not found"
+- Missing schemas for a declared response code
+- Method mismatches (for example exporting `GET` but declaring `post` in metadata)
+- Conflicting paths derived from the filesystem
+- Unsupported schema types (for example, custom validator not implementing StandardSchema)
 
-Verifique se os tipos do Valibot estão sendo importados corretamente:
+Resolve warnings early to keep the spec trustworthy.
 
-```typescript
-import * as v from "valibot";
-// ou
-import { string, number, object } from "valibot";
-```
+## Troubleshooting
 
-### Schema não gerado
+- **Cannot find module** &mdash; ensure `routesDir` and `project` paths are correct relative to where you run the command.
+- **Empty document** &mdash; check that routes export handlers (e.g. `export const GET = ...`). Files without handlers are ignored.
+- **Missing schemas for Valibot** &mdash; be sure to import the exact schema instances used in handlers; re-create them inline or export from shared modules.
 
-Certifique-se de que:
+## Next steps
 
-1. O arquivo termina com `+route.ts`
-2. Os métodos HTTP estão exportados corretamente
-3. Os schemas Valibot estão sendo usados nos handlers
+- Serve the spec live with [`serve()`](/packages/ts-api-core) during development.
+- Generate clients once the [openapi-to-remote](/packages/openapi-to-remote) tool is available.
+- See a full example in the [frontend example](/examples/frontend-example) project.
 
-## Próximos Passos
-
-- [Aprenda sobre geração de OpenAPI](/guides/openapi-generation)
-- [Integre com SvelteKit](/packages/openapi-to-remote)
-- [Configure documentação automática](/guides/documentation)

@@ -1,29 +1,29 @@
-# TS API Core Documentation
+# TS API Kit Documentation
 
-Documentação completa do TS API Core, um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot.
+This SveltePress site houses the official TS API Kit docs.
 
-## Executando a Documentação
+## Running locally
 
 ```bash
-# Instalar dependências
-npm install
-
-# Executar em modo de desenvolvimento
-npm run dev
-
-# Build para produção
-npm run build
+pnpm install
+pnpm dev
 ```
 
-## Estrutura
+## Useful scripts
 
-- **Getting Started** - Instalação e primeiros passos
-- **Packages** - Documentação dos pacotes principais
-- **Guides** - Guias detalhados de uso
-- **Examples** - Exemplos práticos de implementação
+- `pnpm dev` &mdash; start the docs in development mode
+- `pnpm build` &mdash; generate the production build
+- `pnpm preview` &mdash; preview the built site
 
-## Tecnologias
+## Section overview
 
-- [SveltePress](https://sveltepress.site/) - Gerador de documentação
-- [SvelteKit](https://kit.svelte.dev/) - Framework web
-- [TypeScript](https://www.typescriptlang.org/) - Linguagem de programação
+- **Getting Started** &mdash; installation, quick start, and project setup
+- **Packages** &mdash; reference pages for each published package
+- **Guides** &mdash; deep dives into routing, validation, OpenAPI, and middleware
+- **Examples** &mdash; end-to-end projects you can clone
+
+## Tooling
+
+- [SveltePress](https://sveltepress.site/)
+- [SvelteKit](https://kit.svelte.dev/)
+- [TypeScript](https://www.typescriptlang.org/)

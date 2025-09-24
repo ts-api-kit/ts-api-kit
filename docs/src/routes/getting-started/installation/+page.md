@@ -1,96 +1,120 @@
 ---
-title: 'Instalação'
-description: 'Como instalar e configurar o TS API Core em seu projeto.'
+title: "Installation"
+description: "Install TS API Kit and its peers for Node, Bun, and Deno."
 ---
 
-## Pré-requisitos
+Getting set up takes only a few steps: choose your runtime, install the core package with a validator, and scaffold the folders that drive the file router.
 
-- Node.js 14.0.0 ou superior
-- TypeScript 5.0.0 ou superior
-- npm, yarn ou pnpm
+## Prerequisites
 
-## Instalação do Pacote Principal
+- Node.js 20+, Bun 1.1+, or Deno 1.45+
+- TypeScript 5.6 or newer
+- A package manager (pnpm, npm, yarn, or bun)
 
-```bash
-# Usando npm
-npm install ts-api-core
+## 1. Install the core runtime
 
-# Usando yarn
-yarn add ts-api-core
-
-# Usando pnpm
-pnpm add ts-api-core
-```
-
-## Dependências Adicionais
-
-O TS API Core usa Valibot para validação de schemas. Instale-o também:
+### Node.js or Bun
 
 ```bash
-npm install valibot
+# Install the runtime and your preferred validator
+pnpm add @ts-api-kit/core valibot
+# optional: pnpm add zod
 ```
 
-## Estrutura de Projeto Recomendada
+You can swap `pnpm` for `npm install`, `yarn add`, or `bun add`.
+
+### Deno
+
+```bash
+deno add jsr:@ts-api-kit/core
+deno add npm:valibot
+# optional: deno add npm:zod
+```
+
+Valibot is the recommended validator today. The StandardSchema adapter also understands Zod automatically if it is installed.
+
+## 2. Add the OpenAPI compiler (optional)
+
+Install the compiler when you want to emit a static `openapi.json` as part of a build or CI job:
+
+```bash
+pnpm add -D @ts-api-kit/compiler
+```
+
+The runtime can serve `/openapi.json` without the compiler, but writing the file to disk (using `openapiOutput: "file"`) requires this dependency.
+
+## 3. Scaffold the project layout
 
 ```text
 src/
-├── routes/
-│   ├── +middleware.ts
-│   ├── +route.ts
-│   ├── users/
-│   │   ├── +route.ts
-│   │   └── [id]/
-│   │       └── +route.ts
-│   └── api/
-│       └── +route.ts
-├── index.ts
-└── server.ts
+└── routes/
+    ├── +route.ts          # Root handlers
+    ├── +config.ts         # Optional scoped configuration
+    ├── +middleware.ts     # Middleware for this subtree
+    ├── +error.ts          # Error handler (fallbacks supported)
+    ├── +not-found.ts      # 404 handler for this subtree
+    └── users/
+        ├── +route.ts
+        └── [id]/+route.ts
 ```
 
-## Configuração TypeScript
+Feel free to organise by feature areas (`users/`, `orders/`, etc.). Group folders named with parentheses (for example `(auth)/login/+route.ts`) do not affect the URL.
 
-Certifique-se de que seu `tsconfig.json` está configurado corretamente:
+## 4. Configure TypeScript
 
-```ts
+Use the following baseline `tsconfig.json` when targeting Node or Bun:
+
+```json
 {
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
+    "isolatedModules": true,
+    "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src"]
 }
 ```
 
-## Próximos Passos
+For Deno, create `deno.json` with:
 
-Após a instalação, você pode:
+```json
+{
+  "imports": {
+    "@ts-api-kit/core": "jsr:@ts-api-kit/core",
+    "valibot": "npm:valibot"
+  },
+  "tasks": {
+    "dev": "deno run -A src/index.ts"
+  }
+}
+```
 
-1. [Configurar seu primeiro servidor](/getting-started/quick-start)
-2. [Criar suas primeiras rotas](/guides/file-based-routing)
-3. [Adicionar validação de schemas](/guides/schema-validation)
+## 5. Add convenience scripts
 
-## Solução de Problemas
+```json
+{
+  "scripts": {
+    "dev": "node --loader @ts-api-kit/core/node --no-warnings src/index.ts",
+    "build:openapi": "pnpm tsx --no-warnings scripts/openapi.ts"
+  }
+}
+```
 
-### Erro de Módulo não encontrado
+Replace the OpenAPI script with the command that best fits your workflow (for example `pnpm exec @ts-api-kit/compiler generate-openapi`).
 
-Se você encontrar erros de módulo não encontrado, verifique se:
+## 6. Verify the setup
 
-- O TypeScript está configurado corretamente
-- As dependências foram instaladas
-- O Node.js está na versão correta
+1. Create `src/routes/+route.ts` with a trivial `GET` handler.
+2. Run `pnpm dev` (or your equivalent script).
+3. Visit `http://localhost:3000/docs` to confirm the Scalar UI renders.
 
-### Problemas com Valibot
+If everything loads, you are ready for the [Quick Start](/getting-started/quick-start).
 
-Se houver problemas com Valibot, certifique-se de que:
-
-- A versão do Valibot é compatível
-- Os schemas estão sendo importados corretamente
-- O TypeScript está configurado para suportar as features do Valibot

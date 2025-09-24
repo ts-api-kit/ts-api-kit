@@ -1,362 +1,143 @@
 ---
-title: 'ts-api-core'
-description: 'O pacote principal do TS API Core - servidor, roteamento e validação.'
+title: "@ts-api-kit/core"
+description: "Runtime, router, server, and response helpers for TS API Kit."
 ---
 
-O pacote principal do TS API Core que fornece o servidor, sistema de roteamento por arquivos e validação de schemas.
+`@ts-api-kit/core` is the heart of the framework. It provides the file router, request/response helpers, OpenAPI integration, middleware utilities, and a zero-config development server built on Hono.
 
-## Instalação
+## Installation
 
 ```bash
-npm install ts-api-core valibot
+pnpm add @ts-api-kit/core valibot
+# optional: pnpm add zod
 ```
 
-## Características
+See [Installation](/getting-started/installation) for runtime-specific notes and TypeScript settings.
 
-- 🚀 **Roteamento por arquivos** - Organize suas rotas como arquivos
-- 🔒 **Validação de schemas** - Validação automática com Valibot
-- 🛠️ **TypeScript nativo** - Suporte completo ao TypeScript
-- ⚡ **Baseado no Hono** - Performance e simplicidade
-- 🔧 **Middlewares** - Sistema de middlewares flexível
-- 📝 **Auto-documentação** - Schemas como documentação
+## Core Concepts
 
-## API Principal
+| Feature | What it does |
+|---------|--------------|
+| `serve()` | Spins up a Hono server, loads routes from `src/routes`, serves `/openapi.json` and `/docs`, and optionally emits a static spec. |
+| `Server` class | Lower-level API when you need to embed TS API Kit into an existing server or customise lifecycle hooks. |
+| File router | Discovers `+route.ts`, `+config.ts`, `+middleware.ts`, `+layout.tsx`, `+error.ts`, and `+not-found.ts` files, turning them into Hono routes with OpenAPI metadata. |
+| Validation | Accepts Valibot or Zod schemas via the StandardSchema protocol and injects typed values into handlers. |
+| Response helpers | Injected `response` bag plus standalone `json`, `typedJson`, `jsx`, `jsxStream`, `stream`, and more keep responses aligned with docs. |
+| Node loader | `@ts-api-kit/core/node` transpiles `.ts`/`.tsx` on the fly with JSX support from `@kitajs/html`. |
+| Logging | `createLogger`, `setLogLevel`, and environment variables (`TS_API_KIT_LOG_LEVEL`, `DEBUG`) control verbosity. |
 
-### Server
+## Quick Reference
 
-A classe principal para criar e gerenciar o servidor.
+### `serve(options)`
 
-```typescript
-import { Server } from "@ts-api-kit/core";
+```ts
+import { serve } from "@ts-api-kit/core";
 
-const server = new Server({
+await serve({
   port: 3000,
-  cors: {
-    origin: "*",
-    credentials: true,
+  openapi: {
+    info: {
+      title: "Acme API",
+      version: "1.0.0",
+    },
   },
+  openapiOutput: { mode: "memory" },
 });
 ```
 
-#### Opções do Servidor
+Options:
 
-```typescript
-interface ServerOptions {
-  port?: number;           // Porta do servidor (padrão: 3000)
-  host?: string;           // Host do servidor (padrão: "localhost")
-  cors?: CorsOptions;      // Configurações CORS
-  logger?: boolean;        // Habilitar logs (padrão: true)
-}
+- `port` &mdash; defaults to `3000`
+- `openapi` &mdash; document-level overrides (info, servers, tags, components,...)
+- `openapiOutput` &mdash; `{ mode: "memory" | "file" | "none", path?, project? }`
+
+### `Server`
+
+```ts
+import Server from "@ts-api-kit/core";
+
+const server = new Server({ port: 8080 });
+await server.configureRoutes("./src/routes");
+server.start();
 ```
 
-### Roteamento por Arquivos
+Useful when embedding TS API Kit into custom deployments.
 
-Use `mountFileRouter` para montar rotas baseadas na estrutura de arquivos:
+### Route handlers
 
-```typescript
-import { mountFileRouter } from "@ts-api-kit/core";
-
-mountFileRouter(server, "./src/routes");
-```
-
-#### Estrutura de Arquivos
-
-```tree
-src/routes/
-├── +middleware.ts        # Middleware global
-├── +route.ts            # Rota raiz (/)
-├── users/
-│   ├── +route.ts        # /users
-│   └── [id]/
-│       └── +route.ts    # /users/:id
-└── api/
-    └── +route.ts        # /api
-```
-
-### Handlers HTTP
-
-#### GET Handler
-
-```typescript
-import { get, json } from "@ts-api-kit/core";
+```ts
+import { handle, response } from "@ts-api-kit/core";
 import * as v from "valibot";
 
-export default {
-  GET: get({
-    query: v.object({
-      page: v.optional(v.pipe(v.string(), v.transform(Number))),
-      limit: v.optional(v.pipe(v.string(), v.transform(Number))),
-    }),
-  }, ({ query }) => {
-    return json({
-      data: [],
-      pagination: {
-        page: query.page || 1,
-        limit: query.limit || 10,
+export const PUT = handle(
+  {
+    openapi: {
+      request: {
+        params: v.object({ id: v.string() }),
+        body: v.object({ name: v.string() }),
       },
-    });
-  }),
-};
-```
-
-#### POST Handler
-
-```typescript
-import { post, json } from "@ts-api-kit/core";
-import * as v from "valibot";
-
-const CreateUserSchema = v.object({
-  name: v.string(),
-  email: v.pipe(v.string(), v.email()),
-  age: v.optional(v.pipe(v.number(), v.minValue(0))),
-});
-
-export default {
-  POST: post({
-    body: CreateUserSchema,
-  }, ({ body }) => {
-    return json({
-      message: "User created successfully",
-      user: body,
-    });
-  }),
-};
-```
-
-#### PUT Handler
-
-```typescript
-import { put, json } from "@ts-api-kit/core";
-import * as v from "valibot";
-
-export default {
-  PUT: put({
-    params: v.object({
-      id: v.pipe(v.string(), v.transform(Number)),
-    }),
-    body: v.object({
-      name: v.optional(v.string()),
-      email: v.optional(v.pipe(v.string(), v.email())),
-    }),
-  }, ({ params, body }) => {
-    return json({
-      message: `User ${params.id} updated`,
-      user: { id: params.id, ...body },
-    });
-  }),
-};
-```
-
-#### DELETE Handler
-
-```typescript
-import { del, json } from "@ts-api-kit/core";
-import * as v from "valibot";
-
-export default {
-  DELETE: del({
-    params: v.object({
-      id: v.pipe(v.string(), v.transform(Number)),
-    }),
-  }, ({ params }) => {
-    return json({
-      message: `User ${params.id} deleted`,
-    });
-  }),
-};
-```
-
-### Middleware
-
-#### Middleware Global
-
-Crie `src/routes/+middleware.ts`:
-
-```typescript
-import type { MiddlewareHandler } from "hono";
-
-export const middleware: MiddlewareHandler = async (c, next) => {
-  // Log da requisição
-  console.log(`${c.req.method} ${c.req.url}`);
-  
-  // Adiciona headers CORS
-  c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  
-  await next();
-};
-```
-
-#### Middleware por Rota
-
-```typescript
-import { get, json } from "@ts-api-kit/core";
-import type { MiddlewareHandler } from "hono";
-
-const authMiddleware: MiddlewareHandler = async (c, next) => {
-  const token = c.req.header("Authorization");
-  if (!token) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  await next();
-};
-
-export default {
-  GET: get({
-    middleware: [authMiddleware],
-    query: v.object({
-      // ... schema
-    }),
-  }, ({ query }) => {
-    return json({ data: "Protected data" });
-  }),
-};
-```
-
-### Validação de Schemas
-
-O TS API Core usa Valibot para validação de schemas. Todos os dados de entrada são validados automaticamente.
-
-#### Schemas Básicos
-
-```typescript
-import * as v from "valibot";
-
-// String obrigatória
-const nameSchema = v.string();
-
-// String opcional
-const optionalNameSchema = v.optional(v.string());
-
-// String com validação de email
-const emailSchema = v.pipe(v.string(), v.email());
-
-// Número com transformação
-const idSchema = v.pipe(v.string(), v.transform(Number));
-
-// Objeto com propriedades
-const userSchema = v.object({
-  name: v.string(),
-  email: v.pipe(v.string(), v.email()),
-  age: v.optional(v.pipe(v.number(), v.minValue(0))),
-});
-```
-
-#### Schemas Avançados
-
-```typescript
-// União de tipos
-const statusSchema = v.union([
-  v.literal("pending"),
-  v.literal("approved"),
-  v.literal("rejected"),
-]);
-
-// Array de objetos
-const usersSchema = v.array(userSchema);
-
-// Objeto com propriedades condicionais
-const conditionalSchema = v.object({
-  type: v.literal("admin"),
-  permissions: v.array(v.string()),
-}, {
-  type: v.literal("user"),
-  profile: v.object({
-    name: v.string(),
-    email: v.string(),
-  }),
-});
-```
-
-### Utilitários
-
-#### json()
-
-Helper para criar respostas JSON:
-
-```typescript
-import { json } from "@ts-api-kit/core";
-
-// Resposta simples
-return json({ message: "Hello World" });
-
-// Resposta com status
-return json({ error: "Not Found" }, 404);
-
-// Resposta com headers
-return json({ data: [] }, 200, {
-  "X-Custom-Header": "value",
-});
-```
-
-#### Error Handling
-
-```typescript
-import { AppError } from "@ts-api-kit/core";
-
-// Lançar erro personalizado
-throw new AppError("User not found", 404);
-
-// Erro com detalhes
-throw new AppError("Validation failed", 400, {
-  field: "email",
-  message: "Invalid email format",
-});
-```
-
-## Exemplo Completo
-
-```typescript
-// src/server.ts
-import { Server, mountFileRouter } from "@ts-api-kit/core";
-
-const server = new Server({
-  port: 3000,
-  cors: {
-    origin: "*",
-    credentials: true,
+      responses: {
+        200: response.of<{ id: string; name: string }>(),
+        404: response.of<{ error: string }>(),
+      },
+    },
   },
-});
-
-mountFileRouter(server, "./src/routes");
-
-server.start().then(() => {
-  console.log("🚀 Server running on http://localhost:3000");
-});
+  async ({ params, body, response }) => {
+    const item = await update(params.id, body);
+    if (!item) return response.notFound({ error: "Not Found" });
+    return response.ok(item);
+  }
+);
 ```
 
-```typescript
-// src/routes/+route.ts
-import { get, json } from "@ts-api-kit/core";
-import * as v from "valibot";
+### Response helpers
 
-export default {
-  GET: get({
-    query: v.object({
-      name: v.optional(v.string()),
-    }),
-  }, ({ query }) => {
-    return json({
-      message: `Hello ${query.name || 'World'}!`,
-      timestamp: new Date().toISOString(),
-    });
-  }),
-};
+Inside handlers you receive `response`, a bag with methods for common status codes plus `json`, `text`, `html`, `jsx`, `stream`, and `file` helpers. Outside handlers you can use `json(data, init)` or `typedJson<RouteSpec>(payload, { status })` to keep types aligned.
+
+### Middleware utilities
+
+- `defineMiddleware(...mws)` or the alias `use(...)`
+- `handleError(fn)` and `handleNotFound(fn)` for scoped fallbacks
+- `composeMiddleware` and `createLoggerMiddleware()` for quick setup
+
+### Configuration
+
+`DirConfig` supports:
+
+- `body.limit` (Content-Length in bytes)
+- `timeout` (soft timeout with optional custom status/message)
+- `cors` (headers + preflight handling)
+- `auth` (require Authorization header)
+- `rateLimit` (informational headers)
+
+Export the object from `+config.ts` and it will cascade to children.
+
+### Hook utilities
+
+- `setLogLevel(level)` / `getLogLevel()`
+- `getRequestEvent()` for accessing the current context outside handlers
+- `getCurrentFilePath()` useful for debugging and JSX helpers
+
+## Node loader
+
+Run TypeScript files directly during development:
+
+```bash
+node --loader @ts-api-kit/core/node --no-warnings src/index.ts
 ```
 
-## TypeScript Support
+The loader transpiles `.ts`, `.tsx`, and `.jsx`, adds inline source maps, and supports custom JSX factories via `JSX_IMPORT_SOURCE`.
 
-O TS API Core oferece suporte completo ao TypeScript com:
+## Environment variables
 
-- Tipagem automática de parâmetros de rota
-- Inferência de tipos para query parameters
-- Validação de tipos em tempo de compilação
-- IntelliSense completo no VS Code
+| Variable | Effect |
+|----------|--------|
+| `TS_API_KIT_LOG_LEVEL` | `silent`, `error`, `warn`, `info`, or `debug` |
+| `TS_API_KIT_LOG` | Alias for the log level |
+| `DEBUG` | Enables debug logging when it contains `ts-api-kit` or `*` |
 
-## Próximos Passos
+## Learn More
 
-- [Aprenda sobre roteamento por arquivos](/guides/file-based-routing)
-- [Explore validação de schemas](/guides/schema-validation)
-- [Configure middlewares](/guides/middleware)
-- [Gere documentação OpenAPI](/guides/openapi-generation)
+- [Quick Start](/getting-started/quick-start) &mdash; build your first route
+- [File-based Routing](/guides/file-based-routing) &mdash; discover every naming convention
+- [OpenAPI Generation](/guides/openapi-generation) &mdash; document and share your API
