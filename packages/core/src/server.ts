@@ -16,6 +16,9 @@ import { serve } from "@hono/node-server";
 import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+// Type-only Zod imports (optional peer dep)
+import type { ZodTypeAny } from "zod";
+import type { z } from "zod";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { requestId } from "hono/request-id";
@@ -657,7 +660,9 @@ export const jsxStreamHono = (
  */
 export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
 	? StandardSchemaV1.InferInput<S>
-	: unknown;
+	: S extends ZodTypeAny
+		? z.input<S>
+		: unknown;
 
 /**
  * Infers the output type from a StandardSchemaV1 schema.
@@ -667,7 +672,9 @@ export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
  */
 export type InferOutput<S> = S extends StandardSchemaV1<unknown, unknown>
 	? StandardSchemaV1.InferOutput<S>
-	: unknown;
+	: S extends ZodTypeAny
+		? z.output<S>
+		: unknown;
 
 function isStandard(s: unknown): s is AnySchema {
 	return (
@@ -677,6 +684,39 @@ function isStandard(s: unknown): s is AnySchema {
 		((s as { [k: string]: unknown })["~standard"] as { version?: unknown })
 			?.version === 1
 	);
+}
+
+// Zod runtime detection (optional)
+function isZodSchema(s: unknown): s is ZodTypeAny {
+    return (
+        !!s &&
+        typeof s === "object" &&
+        typeof (s as { safeParse?: unknown }).safeParse === "function" &&
+        typeof (s as { parse?: unknown }).parse === "function" &&
+        "_def" in (s as object)
+    );
+}
+
+// Adapt a Zod schema to StandardSchemaV1 to reuse common validation
+function zodToStandard<S extends ZodTypeAny>(
+    schema: S,
+    vendor = "hono-file-router",
+): StandardSchemaV1<z.input<S>, z.output<S>> {
+    return {
+        "~standard": {
+            version: 1,
+            vendor,
+            validate: (value: unknown) => {
+                const r = (schema as ZodTypeAny).safeParse(value) as {
+                    success: boolean;
+                    data?: unknown;
+                    error?: { issues?: unknown[] };
+                };
+                if (r.success) return { value: r.data } as const;
+                return { issues: (r.error?.issues ?? []) as unknown[] } as const;
+            },
+        },
+    } as unknown as StandardSchemaV1<z.input<S>, z.output<S>>;
 }
 
 // DX: stable issue shape
@@ -732,19 +772,26 @@ async function validatePart<S extends AnySchema>(
 	issues: null | { location: typeof where; issues: Issue[] };
 }> {
 	if (!schema) return { value, issues: null };
-	if (!isStandard(schema)) {
+	// Auto-adapt Zod to Standard when provided
+	const effective = isStandard(schema)
+		? schema
+		: isZodSchema(schema)
+			? (zodToStandard(schema as ZodTypeAny, `hono-file-router:${where}`) as unknown as AnySchema)
+			: schema;
+
+	if (!isStandard(effective)) {
 		return {
 			value: null,
 			issues: {
 				location: where,
 				issues: [
-					{ message: "Schema must implement StandardSchemaV1", path: [] },
+					{ message: "Schema must implement StandardSchemaV1 or be a Zod schema", path: [] },
 				],
 			},
 		};
 	}
 
-	const std = (schema as { [k: string]: unknown })["~standard"] as {
+	const std = (effective as { [k: string]: unknown })["~standard"] as {
 		validate: (v: unknown) => unknown | Promise<unknown>;
 	};
 	let r = std.validate(value);
@@ -775,18 +822,24 @@ export function toStandardSchema<S extends AnySchema>(
 	schema: S,
 	vendor = "hono-file-router",
 ): StandardSchemaV1<InferInput<S>, InferOutput<S>> {
-	if (!isStandard(schema))
-		throw new Error("Schema must implement StandardSchemaV1");
-	const std = (schema as { [k: string]: unknown })["~standard"] as {
-		vendor?: string;
-		[k: string]: unknown;
-	};
-	return {
-		"~standard": {
-			...std,
-			vendor: std.vendor ?? vendor,
-		},
-	} as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
+	// Already a Standard schema: just ensure vendor tag
+	if (isStandard(schema)) {
+		const std = (schema as { [k: string]: unknown })["~standard"] as {
+			vendor?: string;
+			[k: string]: unknown;
+		};
+		return {
+			"~standard": {
+				...std,
+				vendor: std.vendor ?? vendor,
+			},
+		} as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
+	}
+	// Zod -> Standard adapter
+	if (isZodSchema(schema)) {
+		return zodToStandard(schema as ZodTypeAny, vendor) as unknown as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
+	}
+	throw new Error("Schema must implement StandardSchemaV1 or be a Zod schema");
 }
 
 /**
@@ -852,25 +905,27 @@ type EffectiveSchemas<T extends RouteSpec> = {
  * Strongly-typed context passed to route handlers after validation.
  */
 export type HandlerContext<T extends RouteSpec> = {
-	params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["params"]>
-		: Record<string, unknown>;
-	query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["query"]>
-		: Record<string, unknown>;
-	headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["headers"]>
-		: Record<string, string>;
-	body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["body"]>
-		: unknown;
-	response: ResponseTools<T>;
+    params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["params"]>
+        : EffectiveSchemas<T>["params"] extends ZodTypeAny
+            ? z.output<EffectiveSchemas<T>["params"]>
+            : Record<string, unknown>;
+    query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["query"]>
+        : EffectiveSchemas<T>["query"] extends ZodTypeAny
+            ? z.output<EffectiveSchemas<T>["query"]>
+            : Record<string, unknown>;
+    headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["headers"]>
+        : EffectiveSchemas<T>["headers"] extends ZodTypeAny
+            ? z.output<EffectiveSchemas<T>["headers"]>
+            : Record<string, string>;
+    body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
+        ? InferOutput<EffectiveSchemas<T>["body"]>
+        : EffectiveSchemas<T>["body"] extends ZodTypeAny
+            ? z.output<EffectiveSchemas<T>["body"]>
+            : unknown;
+    response: ResponseTools<T>;
 };
 
 /**
