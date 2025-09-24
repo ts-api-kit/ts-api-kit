@@ -1,40 +1,148 @@
-# TS API Kit — Core
+# TS API Kit - Core
 
-Core framework for APIs built on Hono with file‑based routing, Valibot/Zod validation, and automatic OpenAPI generation.
+[View on JSR](https://jsr.io/@ts-api-kit/core)
 
-## Features
+> Build type-safe HTTP APIs on top of Hono with zero-boilerplate routing, runtime validation, and instant OpenAPI docs.
 
-- 📁 File-based routing with zero boilerplate
-- ✅ Valibot and Zod schema validation (via StandardSchema adapter)
-- 🧾 Auto-documented routes via OpenAPI + Scalar UI
-- 🧰 Native TypeScript DX and strong typing end-to-end
-- 🧩 Simple, composable middlewares
-- ⚡ Hono runtime performance
+## Contents
+
+- [TS API Kit - Core](#ts-api-kit---core)
+  - [Contents](#contents)
+  - [Highlights](#highlights)
+  - [Installation](#installation)
+    - [Deno](#deno)
+    - [Node.js / Bun](#nodejs--bun)
+  - [Quick Start](#quick-start)
+  - [Routing Model](#routing-model)
+  - [Validation \& Typing](#validation--typing)
+  - [Responses \& OpenAPI](#responses--openapi)
+  - [Server Integration](#server-integration)
+  - [Directory Configuration](#directory-configuration)
+  - [Utilities](#utilities)
+  - [Logging](#logging)
+  - [FAQ](#faq)
+  - [License](#license)
+
+## Highlights
+
+- File-based routing that mirrors your filesystem and runs on Hono
+- Runtime validation with Valibot or Zod via the StandardSchema adapter
+- Automatic OpenAPI generation with Scalar UI (`/docs`) out of the box
+- Typed handlers, params, and responses for an end-to-end TypeScript DX
+- Composable middlewares and per-directory configuration files
 
 ## Installation
 
-```bash
-npm install @ts-api-kit/core valibot
-# or, if you prefer Zod
-npm install @ts-api-kit/core zod
+### Deno
+
+```sh
+deno add jsr:@ts-api-kit/core
+# choose a validator runtime
+deno add npm:valibot
+# or
+deno add npm:zod
 ```
+
+### Node.js / Bun
+
+```sh
+npx jsr add @ts-api-kit/core
+npm install valibot      # or zod
+# pnpm dlx jsr add @ts-api-kit/core
+# bunx jsr add @ts-api-kit/core
+```
+
+> The core auto-detects whether Valibot or Zod is present and wires their standard schema definitions automatically.
 
 ## Quick Start
 
-This kit embraces named exports per HTTP method and the `handle()` helper for consistent validation and docs.
+1. Create your first route in `src/routes/+route.ts`:
 
-### 1) Minimal route using `handle()`
+   ```ts
+   import { handle } from "@ts-api-kit/core";
 
-```ts
-// src/routes/+route.ts
-import { handle } from "@ts-api-kit/core";
+   export const GET = handle(() => ({ hello: "world" }));
+   ```
 
-export const GET = handle(() => ({ hello: "world" }));
+2. Start a server with the built-in helper (`src/main.ts`):
+
+   ```ts
+   import { serve } from "@ts-api-kit/core";
+
+   await serve({
+     port: 3000,
+     openapi: {
+       info: { title: "My API", version: "1.0.0" },
+     },
+   });
+   ```
+
+3. Run with your preferred runtime:
+
+   ```sh
+   deno run -A src/main.ts
+   # or
+   tsx src/main.ts
+   ```
+
+   Visit `/` for your route, `/openapi.json` for the specification, and `/docs` for the Scalar UI.
+
+## Routing Model
+
+- Routes live under `src/routes`.
+- Every folder represents a path segment; `+route.ts` files export handlers for each HTTP verb (`GET`, `POST`, `PUT`, etc.).
+- Dynamic segments use square brackets: `[id]` -> `:id`, `[...slug]` -> `:slug*`, `[index]` maps to `:index`. Group folders in parentheses `(auth)` do not affect the URL.
+
+Example structure:
+
+```text
+src/
+  routes/
+    +route.ts                 -> GET /
+    health/
+      +route.ts               -> GET /health
+    users/
+      +route.ts               -> GET /users
+      [id]/
+        +route.ts             -> PUT /users/:id
+    blog/
+      [...slug]/
+        +route.ts             -> GET /blog/:slug+
 ```
 
-The second argument returns any JSON-serialisable value. If you need more control, use the typed response helpers found under `context.response`.
+Dynamic route example:
 
-### 2) Validating inputs with Valibot
+```ts
+// src/routes/users/[id]/+route.ts
+import { handle } from "@ts-api-kit/core";
+import * as v from "valibot";
+
+export const PUT = handle(
+  {
+    openapi: {
+      request: {
+        params: v.object({ id: v.string() }),
+        body: v.object({
+          name: v.string(),
+          email: v.pipe(v.string(), v.email()),
+        }),
+      },
+    },
+  },
+  async ({ params, body }) => ({
+    id: params.id,
+    ...body,
+  })
+);
+```
+
+## Validation & Typing
+
+- Declare `query`, `params`, `headers`, and `body` schemas with Valibot or Zod.
+- `handle()` parses and validates input before invoking your handler.
+- Parsed values are available on the handler context (`{ query, params, headers, body }`).
+
+Valibot example:
 
 ```ts
 // src/routes/greet/+route.ts
@@ -53,10 +161,9 @@ export const GET = handle(
 );
 ```
 
-You can also use Zod — the kit will auto-detect and validate Zod schemas the same way:
+Zod works the same way:
 
 ```ts
-// src/routes/greet/+route.ts
 import { handle } from "@ts-api-kit/core";
 import { z } from "zod";
 
@@ -72,7 +179,9 @@ export const GET = handle(
 );
 ```
 
-### 3) Strongly typed responses
+## Responses & OpenAPI
+
+`context.response` provides helpers for JSON, text, HTML, JSX, redirects, files, streams, and convenience status builders (`ok`, `created`, `badRequest`, `notFound`, etc.). Convenience helpers require a matching response entry in your OpenAPI spec.
 
 ```ts
 // src/routes/users/+route.ts
@@ -81,248 +190,36 @@ import { response } from "@ts-api-kit/core/openapi";
 import * as v from "valibot";
 
 type User = { id: string; name: string; email: string };
-const items: User[] = [];
+const users: User[] = [];
 
-/**
- * @summary Create user
- * @description Create a user
- * @tags users
- */
 export const POST = handle(
   {
     openapi: {
       request: {
-        /**
-         * @description Body of the request
-         * @example { name: "John Doe", email: "john.doe@example.com" }
-         */
         body: v.object({
-          /** @description Name of the user @example "John Doe" */
           name: v.string(),
-          /** @description Email of the user @example "john.doe@example.com" */
-          email: v.string(),
+          email: v.pipe(v.string(), v.email()),
         }),
       },
       responses: {
-        200: response.of<User>({ description: "OK" }),
+        201: response.of<User>({ description: "Created" }),
       },
     },
   },
   async ({ body, response }) => {
-    const newItem: User = { id: crypto.randomUUID(), ...body } as User;
-    items.push(newItem);
-    return response.ok(newItem);
+    const item: User = { id: crypto.randomUUID(), ...body };
+    users.push(item);
+    return response.created(item);
   }
 );
 ```
 
-### 4) Dynamic params and body
-
-```ts
-// src/routes/users/[id]/+route.ts
-import { handle } from "@ts-api-kit/core";
-import { response } from "@ts-api-kit/core/openapi";
-import * as v from "valibot";
-
-/**
- * @summary Update user
- * @description Update a user by id
- * @tags users
- */
-export const PUT = handle(
-  {
-    openapi: {
-      request: {
-        /** @description Path params */
-        params: v.object({ id: v.pipe(v.string(), v.transform(Number)) }),
-        /** @description Request body */
-        body: v.object({
-          /** @description Name of the user */
-          name: v.string(),
-          /** @description Email of the user */
-          email: v.pipe(v.string(), v.email()),
-        }),
-        // You can also add `headers: v.object({ ... })` here when needed
-      },
-      responses: {
-        200: response.of<{ message: string }>(),
-        400: response.of<{ error: string }>(),
-      },
-    },
-  },
-  async ({ params, body, response }) => {
-    // ... update user ...
-    return response.ok({ message: `User ${params.id} updated` });
-  }
-);
-```
-
-### 5) Optional segments and regex patterns
-
-TS API Kit supports advanced routing patterns including optional segments and regex validation:
-
-#### Optional segments
-
-Use double brackets `[[...]]` to create optional route segments:
-
-```ts
-// src/routes/[[locale]]/+route.ts
-export const GET = handle(async (c) => {
-  const locale = c.req.param("locale") || "en";
-  return { locale, message: `Hello in ${locale}` };
-});
-```
-
-This creates routes for both `/` and `/:locale` where the locale parameter is optional.
-
-#### Regex patterns
-
-Add regex validation directly in the route segment:
-
-```ts
-// src/routes/users/[id([0-9]+)]/+route.ts
-export const GET = handle(
-  {
-    openapi: {
-      request: {
-        params: v.object({ id: v.pipe(v.string(), v.transform(Number)) }),
-      },
-    },
-  },
-  async ({ params }) => {
-    return { user: { id: params.id, name: `User ${params.id}` } };
-  }
-);
-```
-
-This ensures only numeric IDs are accepted (e.g., `/users/123` but not `/users/abc`).
-
-#### Optional catch-all routes
-
-Combine optional segments with catch-all patterns:
-
-```ts
-// src/routes/blog/[[...slug]]/+route.ts
-export const GET = handle(async (c) => {
-  const slug = c.req.param("slug");
-  if (!slug) {
-    return { posts: "All blog posts" };
-  }
-  return { post: `Blog post: ${slug}` };
-});
-```
-
-This handles both `/blog` (all posts) and `/blog/any/nested/path` (specific post).
-
-### 6) Route-level middleware
-
-```ts
-// src/routes/+middleware.ts
-import type { MiddlewareHandler } from "hono";
-
-export const middleware: MiddlewareHandler = async (c, next) => {
-  c.header("x-api-version", "1.0.0");
-  await next();
-};
-```
-
-## File-based Routing
-
-Folder names map to paths. Dynamic segments use square brackets and rest parameters:
-
-```text
-src/routes
-├── +route.ts              →   /
-├── users/+route.ts        →   /users
-├── users/[id]/+route.ts   →   /users/:id
-└── blog/[...slug]/+route.ts → /blog/:slug{.*}
-```
-
-## OpenAPI & Docs
-
-OpenAPI is generated automatically from your route specs and optional JSDoc.
-
-- View JSON at `GET /openapi.json`.
-- Browse docs at `GET /docs` (Scalar UI).
-
-You can enrich operations with JSDoc above your exports:
-
-```ts
-/**
- * @summary List users
- * @description Returns a paginated list of users.
- * @tags users paginated
- */
-export const GET = handle(/* ... */);
-```
-
-### Root OpenAPI (app-level)
-
-You can provide document-level OpenAPI metadata at server startup via `serve({ openapi })`.
+Document-level OpenAPI metadata can be supplied at startup:
 
 ```ts
 import { serve } from "@ts-api-kit/core";
 
-serve({
-  openapi: {
-    info: {
-      title: "My API",
-      version: "1.0.0",
-      description: "Awesome API",
-      termsOfService: "https://example.com/terms",
-      contact: { name: "Team", url: "https://example.com", email: "team@example.com" },
-      license: { name: "MIT", url: "https://opensource.org/licenses/MIT" },
-    },
-    servers: [
-      { url: "{{server.origin}}", description: "Default" },
-    ],
-    tags: [{ name: "users", description: "User operations" }],
-    externalDocs: { url: "https://example.com/docs", description: "Docs" },
-    components: {
-      securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-      },
-    },
-    extensions: { "x-logo": { url: "https://example.com/logo.png", altText: "Logo" } },
-  },
-});
-```
-
-If you omit `info` and `servers`, sane defaults are applied from `package.json` and the request URL:
-
-- `info.title` ← `package.json.displayName` or `package.json.name` or `"API"`
-- `info.version` ← `package.json.version` or `"1.0.0"`
-- `info.description` ← `package.json.description` or `""`
-- `servers` ← `[{ url: <request origin>, description: "Default" }]`
-
-You can also put an `openapi` object in `package.json`. The core will load it as defaults and then apply `serve({ openapi })` as overrides:
-
-```json
-{
-  "name": "my-app",
-  "version": "1.2.3",
-  "displayName": "My App",
-  "description": "My API",
-  "openapi": {
-    "info": { "title": "My App", "version": "2.0.0", "description": "Custom" },
-    "tags": [{ "name": "health", "description": "Health check" }]
-  }
-}
-```
-
-#### Placeholders (safe)
-
-The core interpolates placeholders in a few fields (supports both `{{key}}` and legacy `${key}`):
-
-- Server URL (`servers[].url`): `{{server.origin}}`, `{{server.protocol}}`, `{{server.host}}`, `{{server.port}}`
-- Package fields: `{{pkg.displayName}}`, `{{pkg.name}}`, `{{pkg.version}}`, `{{pkg.description}}`
-- Info: applied to `info.title`, `info.version`, `info.description`
-- External docs: applied to `externalDocs.url`
-
-Example:
-
-```ts
-serve({
+await serve({
   openapi: {
     info: {
       title: "{{pkg.displayName}}",
@@ -331,39 +228,35 @@ serve({
     },
     servers: [{ url: "{{server.origin}}", description: "Default" }],
   },
+  openapiOutput: {
+    mode: "file",
+    path: "./openapi.json",
+    project: "./tsconfig.json",
+  },
 });
 ```
 
-### Generation modes
+Supported generation modes:
 
-Control how the OpenAPI document is produced via `openapiOutput` (defaults to `"memory"`):
+- `memory` (default): builds the document in-memory for `/openapi.json`.
+- `file`: creates a static `openapi.json` at startup (configure `path`/`project`).
+- `none`: disables generation and falls back to the dynamic builder only.
 
-- `"memory"` (default): typed generation in memory (no file) for `/openapi.json`.
-- `"file"`: generate a static `openapi.json` at startup (optionally configure `path` and `project`).
-- `"none"`: do not generate; fallback to the dynamic builder (no TypeScript AST), still merges root overrides.
+Placeholders like `{{pkg.name}}` and `{{server.origin}}` are resolved automatically across `info`, `servers`, and `externalDocs`. Defaults are read from your `package.json` `openapi` block when present.
+
+## Server Integration
+
+Use the zero-config `serve()` helper or wire the file router into an existing Hono app.
 
 ```ts
-serve({
-  openapi,
-  openapiOutput: "file", // or { mode: "file", path: "./openapi.json", project: "./tsconfig.json" }
-});
+// Minimal server
+import { serve } from "@ts-api-kit/core";
+
+await serve({ port: 3000 });
 ```
 
-## Validation & Types
-
-- Define `query`, `params`, `headers`, and `body` with Valibot or Zod.
-- `handle()` validates inputs and passes parsed values to your handler.
-- Response helpers are available via `context.response`:
-  - `json`, `text`, `html`, `jsx`, `redirect`, `file`, `stream`.
-  - Convenience: `ok`, `created`, `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `unprocessableEntity`, `tooManyRequests`, `internalError`.
-  - Convenience helpers require the corresponding status code in `openapi.responses`.
-
-## Server (Node)
-
-Start a Node server, mount routes, and serve docs:
-
 ```ts
-// server.ts
+// Custom server instance
 import Server from "@ts-api-kit/core";
 
 const server = new Server();
@@ -371,66 +264,56 @@ await server.configureRoutes("./src/routes");
 server.start(3000);
 ```
 
-## Utilities
+```ts
+// Mount into an existing Hono app
+import { Hono } from "hono";
+import { mountFileRouter } from "@ts-api-kit/core";
 
-- `error(code, message, meta?)` to throw a typed `AppError`.
-- `getRequestEvent()` to access cookies/headers outside the Hono context.
+const app = new Hono();
+await mountFileRouter(app, { routesDir: "./src/routes" });
+export default app;
+```
 
-## Logging
+## Directory Configuration
 
-- Mount logs show routes, middleware, and special handlers at `info` level.
-- Control verbosity via env var `TS_API_KIT_LOG_LEVEL` or `DEBUG`:
-  - Levels: `silent | error | warn | info | debug` (default: `info`).
-  - Example: `TS_API_KIT_LOG_LEVEL=debug` or `DEBUG=ts-api-kit`.
-- Programmatic control: `import { setLogLevel } from "@ts-api-kit/core/utils"; setLogLevel("silent")`.
-- The file router also accepts per-call options: `mountFileRouter(app, { routesDir, logLevel: "debug" })` or `{ silent: true }`.
-
-## Per-directory +config.ts
-
-Add a `+config.ts` file in any routes folder to apply scoped configuration as middleware to that path and its children.
-
-Example:
+Attach scoped middleware with `+config.ts` files. Settings cascade to nested routes.
 
 ```ts
 // src/routes/+config.ts
 import type { DirConfig } from "@ts-api-kit/core";
 
 export default {
-  body: { limit: 1_048_576 },           // 1MB Content-Length limit
-  timeout: { ms: 5000 },                // 5s soft timeout (504 on exceed)
+  body: { limit: 1_048_576 }, // 1 MB
+  timeout: { ms: 5000 },      // 5 s soft timeout
   cors: { origin: "*", credentials: true },
-  auth: { required: false },            // if true, requires Authorization header
-  rateLimit: { windowMs: 60000, max: 120, policy: "120;w=60" }, // headers only
+  auth: { required: false },
+  rateLimit: { windowMs: 60_000, max: 120, policy: "120;w=60" },
 } satisfies DirConfig;
 ```
 
 Notes:
 
-- CORS is header-based and handles preflight (OPTIONS 204).
-- Body limit uses `Content-Length` best-effort (does not stream-measure body).
-- Timeout is soft; work may continue server-side, but the client receives 504.
-- `auth.required` only enforces presence of `Authorization` header.
-- `rateLimit` only emits informational headers (no enforcement).
+- CORS is header-based and includes OPTIONS preflight handling.
+- Body limits rely on `Content-Length`.
+- Timeout is soft; work may continue server-side after the 504 response.
+- `auth.required` only asserts the presence of an `Authorization` header.
+- `rateLimit` emits informational headers without enforcing limits.
 
-## Schema Examples (Valibot)
+## Utilities
 
-```ts
-import * as v from "valibot";
+- `error(code, message, meta?)` throws a typed `AppError` that maps to the OpenAPI spec.
+- `getRequestEvent()` exposes cookies and headers outside the Hono context (e.g., inside helpers or services).
 
-// Query parameters
-v.object({ page: v.optional(v.number(), 1), search: v.optional(v.string()) });
+## Logging
 
-// Body validation
-v.object({ name: v.string(), email: v.pipe(v.string(), v.email()) });
-
-// Params validation
-v.object({ id: v.pipe(v.string(), v.transform(Number)) });
-```
+- Default log level is `info`; change it via `TS_API_KIT_LOG_LEVEL` or `DEBUG=ts-api-kit`.
+- Programmatically adjust with `setLogLevel("silent" | "error" | "warn" | "info" | "debug")`.
+- `mountFileRouter` accepts per-call options such as `{ logLevel: "debug" }` or `{ silent: true }`.
 
 ## FAQ
 
-- Should I use `handle()` or `get()/post()`? Prefer `handle()` with named exports (`export const GET = handle(...)`). It offers consistent typing and integrates OpenAPI metadata in one place.
-- How do I add docs without types? Add JSDoc above your export or provide `openapi: { summary, description, tags, responses }` in the spec.
+- **Should I use `handle()` or `get()/post()`?** Prefer `handle()` with named exports (e.g., `export const GET = handle(...)`). It centralises validation, typing, and OpenAPI metadata.
+- **How do I document routes without schemas?** Supply OpenAPI fields on the handler (`openapi: { summary, description, tags, responses }`) or add JSDoc comments above the export.
 
 ## License
 
