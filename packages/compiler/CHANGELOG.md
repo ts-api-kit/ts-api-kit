@@ -1,5 +1,16 @@
 # @ts-api-kit/compiler
 
+## 0.3.0
+
+### Minor Changes
+
+- [#7](https://github.com/ts-api-kit/ts-api-kit/pull/7) [`0986794`](https://github.com/ts-api-kit/ts-api-kit/commit/09867940d8b548e06253ef24c078697727384f4a) Thanks [@devzolo](https://github.com/devzolo)! - Add per‑dir config, scoped handlers, Zod support, and improved docs/logging
+
+### Patch Changes
+
+- Updated dependencies [[`0986794`](https://github.com/ts-api-kit/ts-api-kit/commit/09867940d8b548e06253ef24c078697727384f4a)]:
+  - @ts-api-kit/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
