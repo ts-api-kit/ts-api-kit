@@ -17,7 +17,7 @@ function depthOf(path: string): number {
   return path.split("/").filter(Boolean).length;
 }
 
-export function registerScopedError(base: string, handler: ScopedErrorHandler) {
+export function registerScopedError(base: string, handler: ScopedErrorHandler): void {
   const norm = base === "" ? "/" : base;
   const depth = depthOf(norm);
   // replace existing with same base
@@ -31,7 +31,7 @@ export function registerScopedError(base: string, handler: ScopedErrorHandler) {
 export function registerScopedNotFound(
   base: string,
   handler: ScopedNotFoundHandler,
-) {
+): void {
   const norm = base === "" ? "/" : base;
   const depth = depthOf(norm);
   const idx = notFoundHandlers.findIndex((e) => e.base === norm);
@@ -61,4 +61,3 @@ export function resolveNotFoundForPath(
   for (const e of notFoundHandlers) if (matchBase(e.base, p)) return e.handler;
   return undefined;
 }
-

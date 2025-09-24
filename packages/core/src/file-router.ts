@@ -496,15 +496,19 @@ export async function mountFileRouter(
 			}
 		}
 
-			// For TSX/JSX routes: allow default export function as ALL with text/html
-			const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
-			if (isJsxRoute && defFn) {
-				const wrapped = handle((_: any) => (defFn as () => unknown)(), undefined, file);
-				for (const m of METHOD_EXPORTS) {
-					const mm = m.toLowerCase() as HttpMethod;
-					if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);
-				}
+		// For TSX/JSX routes: allow default export function as ALL with text/html
+		const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
+		if (isJsxRoute && defFn) {
+			const wrapped = handle(
+				(_: any) => (defFn as () => unknown)(),
+				undefined,
+				file,
+			);
+			for (const m of METHOD_EXPORTS) {
+				const mm = m.toLowerCase() as HttpMethod;
+				if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);
 			}
+		}
 
 		// No handlers found: skip
 		if (!handlers.size) continue;
