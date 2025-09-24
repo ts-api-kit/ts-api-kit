@@ -1,6 +1,7 @@
 // Lightweight OpenAPI builder focused on route-level metadata + valibot schemas
 
 import type * as v from "valibot";
+import type * as z from "zod";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
 import { createLogger } from "../utils/logger.ts";
 import type { ResponseMarker } from "./markers.ts";
@@ -198,6 +199,99 @@ export const vToJsonSchema = (
 		default:
 			return {}; // fallback for transforms/pipes; OpenAPI will still be valid
 	}
+};
+
+// Basic Zod -> JSON Schema converter for common types used by the kit
+type ZodAny = z.ZodTypeAny;
+type ZodObjectDef = {
+  typeName: string;
+  shape?: () => Record<string, ZodAny>;
+};
+
+function isZodSchema(s: unknown): s is ZodAny {
+  return !!s && typeof s === "object" && typeof (s as { safeParse?: unknown }).safeParse === "function" && "_def" in (s as object);
+}
+
+export const zToJsonSchema = (schema: ZodAny): Json => {
+  const s = schema as ZodAny & { _def: { typeName: string; innerType?: ZodAny; type?: ZodAny; options?: ZodAny[]; values?: unknown[]; schema?: ZodAny; shape?: () => Record<string, ZodAny> } };
+  const t = s._def?.typeName;
+
+  switch (t) {
+    case "ZodString":
+      return { type: "string" };
+    case "ZodNumber":
+      return { type: "number" };
+    case "ZodBoolean":
+      return { type: "boolean" };
+    case "ZodUnknown":
+    case "ZodAny":
+      return {};
+    case "ZodArray": {
+      const item = (s._def as { type?: ZodAny }).type;
+      return { type: "array", items: item ? zToJsonSchema(item) : {} };
+    }
+    case "ZodLiteral": {
+      const val = (s._def as { value?: unknown } as unknown as { value?: unknown }).value;
+      const out: Record<string, unknown> = { enum: [val] };
+      const ty = typeof val;
+      if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
+      return out as unknown as Json;
+    }
+    case "ZodEnum": {
+      const values = (s._def as { values?: unknown[] }).values ?? [];
+      const out: Record<string, unknown> = { enum: values };
+      const ty = typeof values[0];
+      if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
+      return out as unknown as Json;
+    }
+    case "ZodUnion": {
+      const opts = (s._def as { options?: ZodAny[] }).options ?? [];
+      // collapse union of literals to enum when possible
+      const allLiteral = opts.length && opts.every((o) => (o as any)?._def?.typeName === "ZodLiteral");
+      if (allLiteral) {
+        const values = opts.map((o) => (o as any)?._def?.value);
+        const out: Record<string, unknown> = { enum: values };
+        const ty = typeof values[0];
+        if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
+        return out as unknown as Json;
+      }
+      return { anyOf: opts.map((o) => zToJsonSchema(o)) } as unknown as Json;
+    }
+    case "ZodOptional": {
+      const inner = (s._def as { innerType?: ZodAny }).innerType;
+      return inner ? zToJsonSchema(inner) : {};
+    }
+    case "ZodDefault": {
+      const inner = (s._def as { innerType?: ZodAny }).innerType;
+      return inner ? zToJsonSchema(inner) : {};
+    }
+    case "ZodNullable": {
+      const inner = (s._def as { innerType?: ZodAny }).innerType;
+      const base = inner ? zToJsonSchema(inner) : {};
+      // basic nullable handling (OpenAPI 3.1)
+      return { anyOf: [base, { type: "null" } ] } as unknown as Json;
+    }
+    case "ZodObject": {
+      const def = s._def as unknown as ZodObjectDef;
+      const shape = (schema as any).shape ?? def.shape?.();
+      const props: Record<string, Json> = {};
+      const required: string[] = [];
+      for (const [k, child] of Object.entries(shape ?? {})) {
+        props[k] = zToJsonSchema(child as ZodAny);
+        const ct = (child as any)?._def?.typeName;
+        if (ct !== "ZodOptional") required.push(k);
+      }
+      const out: Record<string, unknown> = { type: "object", properties: props };
+      if (required.length) (out as { required?: string[] }).required = required;
+      return out as unknown as Json;
+    }
+    case "ZodEffects": {
+      const inner = (s._def as { schema?: ZodAny }).schema;
+      return inner ? zToJsonSchema(inner) : {};
+    }
+    default:
+      return {};
+  }
 };
 
 /**
@@ -420,42 +514,62 @@ export class OpenAPIBuilder {
 		this.ensurePath(op.path);
 		const method = op.method.toLowerCase();
 
-		const reqBody: RequestBodyObject | undefined = op.request?.body
-			? {
-					required: true,
-					content: {
-						[op.request?.mediaType ?? "application/json"]: {
-							schema:
-								op.request?.body && isValibot(op.request?.body)
-									? vToJsonSchema(op.request.body)
-									: (op.request?.body as unknown as Json),
-							example: op.request?.examples,
-						},
-					},
-				}
-			: undefined;
+        const reqBody: RequestBodyObject | undefined = op.request?.body
+            ? {
+                    required: true,
+                    content: {
+                        [op.request?.mediaType ?? "application/json"]: {
+                            schema:
+                                op.request?.body && isValibot(op.request?.body)
+                                    ? vToJsonSchema(op.request.body)
+                                    : (isZodSchema(op.request?.body)
+                                        ? zToJsonSchema(op.request.body as z.ZodTypeAny)
+                                        : (op.request?.body as unknown as Json)),
+                            example: op.request?.examples,
+                        },
+                    },
+                }
+            : undefined;
 
 		const parameters: ParameterOrRef[] = [];
 
 		const log = createLogger("openapi:builder");
-		if (op.request?.query) {
-			log.debug(`Processing query params with filePath: ${op.filePath}`);
-			parameters.push(
-				...valibotObjectToParams(op.request.query, "query", op.filePath),
-			);
-		}
-		if (op.request?.headers) {
-			log.debug(`Processing header params with filePath: ${op.filePath}`);
-			parameters.push(
-				...valibotObjectToParams(op.request.headers, "header", op.filePath),
-			);
-		}
-		if (op.request?.params) {
-			log.debug(`Processing path params with filePath: ${op.filePath}`);
-			parameters.push(
-				...valibotObjectToParams(op.request.params, "path", op.filePath),
-			);
-		}
+        if (op.request?.query) {
+            log.debug(`Processing query params with filePath: ${op.filePath}`);
+            if (isValibot(op.request.query)) {
+                parameters.push(
+                    ...valibotObjectToParams(op.request.query, "query", op.filePath),
+                );
+            } else if (isZodSchema(op.request.query)) {
+                parameters.push(
+                    ...zodObjectToParams(op.request.query as z.ZodTypeAny, "query", op.filePath),
+                );
+            }
+        }
+        if (op.request?.headers) {
+            log.debug(`Processing header params with filePath: ${op.filePath}`);
+            if (isValibot(op.request.headers)) {
+                parameters.push(
+                    ...valibotObjectToParams(op.request.headers, "header", op.filePath),
+                );
+            } else if (isZodSchema(op.request.headers)) {
+                parameters.push(
+                    ...zodObjectToParams(op.request.headers as z.ZodTypeAny, "header", op.filePath),
+                );
+            }
+        }
+        if (op.request?.params) {
+            log.debug(`Processing path params with filePath: ${op.filePath}`);
+            if (isValibot(op.request.params)) {
+                parameters.push(
+                    ...valibotObjectToParams(op.request.params, "path", op.filePath),
+                );
+            } else if (isZodSchema(op.request.params)) {
+                parameters.push(
+                    ...zodObjectToParams(op.request.params as z.ZodTypeAny, "path", op.filePath),
+                );
+            }
+        }
 
 		// Always allow optional trace id
 		parameters.push({ $ref: "#/components/parameters/TraceId" });
@@ -595,4 +709,28 @@ function valibotObjectToParams(
 		out.push(param);
 	}
 	return out;
+}
+
+function zodObjectToParams(
+  schema: z.ZodTypeAny,
+  where: "query" | "path" | "header",
+  filePath?: string,
+): ParameterObject[] {
+  const entries: Record<string, z.ZodTypeAny> = ((schema as any)?.shape ?? (schema as any)?._def?.shape?.()) ?? {};
+  const out: ParameterObject[] = [];
+  for (const [name, sch] of Object.entries(entries)) {
+    const typeName = (sch as any)?._def?.typeName as string | undefined;
+    const isOptional = typeName === "ZodOptional";
+    const required = !isOptional && where !== "header";
+    const jsonSchema = zToJsonSchema(sch as z.ZodTypeAny);
+    const param: ParameterObject = { name, in: where, required, schema: jsonSchema };
+
+    if (filePath) {
+      const jsdoc = readParameterJSDoc(filePath, name);
+      if (jsdoc.description) param.description = jsdoc.description;
+      if (jsdoc.example) param.example = jsdoc.example;
+    }
+    out.push(param);
+  }
+  return out;
 }
