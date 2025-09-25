@@ -1,29 +1,38 @@
-# TS API Kit Documentation
+# sv
 
-This SveltePress site houses the official TS API Kit docs.
+Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
 
-## Running locally
+## Creating a project
 
-```bash
-pnpm install
-pnpm dev
+If you're seeing this, you've probably already done this step. Congrats!
+
+```sh
+# create a new project in the current directory
+npx sv create
+
+# create a new project in my-app
+npx sv create my-app
 ```
 
-## Useful scripts
+## Developing
 
-- `pnpm dev` &mdash; start the docs in development mode
-- `pnpm build` &mdash; generate the production build
-- `pnpm preview` &mdash; preview the built site
+Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
 
-## Section overview
+```sh
+npm run dev
 
-- **Getting Started** &mdash; installation, quick start, and project setup
-- **Packages** &mdash; reference pages for each published package
-- **Guides** &mdash; deep dives into routing, validation, OpenAPI, and middleware
-- **Examples** &mdash; end-to-end projects you can clone
+# or start the server and open the app in a new browser tab
+npm run dev -- --open
+```
 
-## Tooling
+## Building
 
-- [SveltePress](https://sveltepress.site/)
-- [SvelteKit](https://kit.svelte.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
+To create a production version of your app:
+
+```sh
+npm run build
+```
+
+You can preview the production build with `npm run preview`.
+
+> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
