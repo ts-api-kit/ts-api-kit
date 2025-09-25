@@ -1,6 +1,14 @@
-<script>
-  const { children } = $props()
+<script lang="ts">
+	import '../app.css';
+	import favicon from '$lib/assets/favicon.svg';
+	import { ModeWatcher } from 'mode-watcher';
+
+	let { children } = $props();
 </script>
 
-<!-- Leave this. Or you can add more content for your custom layout -->
+<svelte:head>
+	<link rel="icon" href={favicon} />
+</svelte:head>
+
+<ModeWatcher />
 {@render children?.()}
