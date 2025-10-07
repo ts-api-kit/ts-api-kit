@@ -2,10 +2,11 @@
   "name": "with-cloudflare-workers",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "build": "tsc"
+    "generate:routes": "ts-api-compiler generate-routes --routes ./src/routes --output ./src/routes.generated.ts",
+    "dev": "pnpm generate:routes && wrangler dev",
+    "build": "pnpm generate:routes",
+    "deploy": "pnpm build && wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
   "dependencies": {
     "hono": "^4.9.10",
@@ -13,6 +14,7 @@
     "valibot": "^1.1.0"
   },
   "devDependencies": {
+    "@ts-api-kit/compiler": "workspace:*",
     "wrangler": "^4.4.0"
   }
 }

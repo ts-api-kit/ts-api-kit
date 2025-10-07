@@ -12,6 +12,7 @@ Instead, you must **import and register routes statically**. See `src/index.ts` 
 
 ```bash
 npm install
+npm run generate:routes  # Generate static route mappings
 npm run dev
 ```
 
@@ -59,25 +60,33 @@ export const GET = handle(
 );
 ```
 
-### 2. Register Routes Statically
+### 2. Generate Route Mappings
 
-In `src/index.ts`, import and register your routes:
+Run the route generator to create static imports:
+
+```bash
+npm run generate:routes
+```
+
+This creates `src/routes.generated.ts` with all your routes statically imported.
+
+### 3. Use Generated Routes
+
+In `src/index.ts`, import and use the generated route mapper:
 
 ```ts
 import { Hono } from "hono";
-import * as rootRoute from "./routes/+route";
+import { registerRoutes } from "./routes.generated";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
-// Register each HTTP method
-if (rootRoute.GET) app.get("/", rootRoute.GET as any);
-if (rootRoute.POST) app.post("/", rootRoute.POST as any);
-// ... other methods
+// Register all routes automatically
+registerRoutes(app);
 
 export default app;
 ```
 
-### 3. Use Cloudflare Bindings
+### 4. Use Cloudflare Bindings
 
 Pass `CloudflareBindings` as generics when instantiating Hono:
 

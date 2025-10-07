@@ -500,7 +500,7 @@ export async function mountFileRouter(
 		const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
 		if (isJsxRoute && defFn) {
 			const wrapped = handle(
-				(_: any) => (defFn as () => unknown)(),
+				(_) => (defFn as () => unknown)(),
 				undefined,
 				file,
 			);

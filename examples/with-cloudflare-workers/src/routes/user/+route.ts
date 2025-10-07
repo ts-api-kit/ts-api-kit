@@ -1,6 +1,5 @@
-import { handle } from "@ts-api-kit/core";
-import { response } from "@ts-api-kit/core/openapi";
-import * as z from "zod";
+import { handle, response } from "@ts-api-kit/core";
+import * as v from "valibot";
 
 interface User {
 	id: number;
@@ -17,8 +16,8 @@ export const GET = handle(
 	{
 		openapi: {
 			request: {
-				query: z.object({
-					id: z.number(),
+				query: v.object({
+				  id: v.pipe(v.string(), v.transform(Number), v.number()),
 				}),
 			},
 			responses: {
