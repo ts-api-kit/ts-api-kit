@@ -1,15 +1,10 @@
 import { handle, response } from "@ts-api-kit/core";
 import * as v from "valibot";
 
-interface User {
-	id: number;
-	name: string;
-	email: string;
-	parent?: User;
-}
+
 
 interface HelloWorldResponse {
-	user: User;
+	hello: string;
 }
 
 export const GET = handle(
@@ -17,7 +12,7 @@ export const GET = handle(
 		openapi: {
 			request: {
 				query: v.object({
-				  id: v.pipe(v.string(), v.transform(Number), v.number()),
+				  name: v.optional(v.string()),
 				}),
 			},
 			responses: {
@@ -25,14 +20,9 @@ export const GET = handle(
 			},
 		},
 	},
-	async ({ response }) => {
+	async ({ response, query }) => {
 		return response.ok({
-			user: {
-				id: 1,
-				name: "John Doe",
-				email: "john.doe@example.com",
-				parent: { id: 2, name: "Jane Doe", email: "jane.doe@example.com" },
-			},
+			hello: `Hello ${query.name ?? "World"}`,
 		});
 	},
 );

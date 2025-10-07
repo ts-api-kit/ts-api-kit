@@ -13,6 +13,7 @@
 import { type Project, type Type, ts } from "ts-morph";
 
 export { generateOpenAPI } from "./openapi-generator.ts";
+export { generateRouteMapper, scanRoutes } from "./route-mapper.ts";
 
 type OA =
 	| { type: "string"; format?: string; enum?: string[] }
