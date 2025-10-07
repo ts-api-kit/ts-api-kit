@@ -1073,7 +1073,14 @@ export function createHandler<T extends RouteSpec>(
 			if (!registered && spec && (spec as WithOpenAPI).openapi) {
 				// Hono exposes the route pattern in c.req.routePath in v4+; fallback to c.req.path
 				const method = c.req.method.toLowerCase() as HttpMethod;
-				const path = routePath(c) ?? c.req.path; // may be "/users/:id"
+				let path: string;
+				try {
+					path = routePath(c) ?? c.req.path;
+				} catch {
+					// routePath can fail in some environments (e.g., Cloudflare Workers)
+					// Fallback to the request path
+					path = c.req.path;
+				}
 				const { req, res, meta } = extractSchemas(spec);
 				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
 				// this.log.info(`Request schemas:`, req);

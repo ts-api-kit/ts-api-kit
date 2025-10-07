@@ -1,0 +1,18 @@
+{
+  "name": "with-cloudflare-workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "hono": "^4.9.10",
+    "@ts-api-kit/core": "workspace:*",
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.4.0"
+  }
+}

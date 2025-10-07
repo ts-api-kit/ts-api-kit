@@ -22,7 +22,6 @@ export * from "./openapi/registry.ts";
 export * from "./server.ts";
 export { default as Server } from "./server.ts";
 
-import { generateOpenAPI } from "./openapi/generator/index.ts";
 import {
 	type RootOverrides,
 	setOpenAPIDefaults,
@@ -98,6 +97,8 @@ export const serve = async (options: ServeOptions = {}): Promise<void> => {
 	if (mode === "file") {
 		try {
 			const project = outOpt.project || "./tsconfig.json";
+			// Dynamic import to avoid bundling Node.js-specific code in non-Node environments
+			const { generateOpenAPI } = await import("./openapi/generator/index.ts");
 			await generateOpenAPI(project, outPath);
 		} catch (err) {
 			console.error("OpenAPI file generation failed:", err);

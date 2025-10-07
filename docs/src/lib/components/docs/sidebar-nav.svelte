@@ -41,7 +41,7 @@
 			<SidebarMenu>
 				{#each section.items as item}
 					<SidebarMenuItem>
-						<SidebarButton isActive={item.href === activeHref} on:click={() => navigateTo(item)}>
+						<SidebarButton isActive={item.href === activeHref} onclick={() => navigateTo(item)}>
 							<span class="truncate">{item.title}</span>
 							{#if item.badge}
 								<SidebarMenuBadge class="uppercase">{item.badge}</SidebarMenuBadge>
