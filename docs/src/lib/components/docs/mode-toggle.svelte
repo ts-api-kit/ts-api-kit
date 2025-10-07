@@ -49,7 +49,7 @@
 		<DropdownMenuSeparator />
 		{#each options as option}
 			<!-- @ts-expect-error bits-ui doesn't expose select event typings -->
-			<DropdownItem on:select={() => handleSelect(option.value)}>
+			<DropdownItem onselect={() => handleSelect(option.value)}>
 				<option.icon class="size-4" />
 				<span class="flex-1 text-sm">{option.label}</span>
 				{#if currentMode === option.value}

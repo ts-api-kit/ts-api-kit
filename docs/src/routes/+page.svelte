@@ -309,7 +309,7 @@
 											>
 												<button
 													type="button"
-													on:click={() => copyCommand(option.command)}
+													onclick={() => copyCommand(option.command)}
 													class="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted"
 												>
 													{#if copiedCommand === option.command}
