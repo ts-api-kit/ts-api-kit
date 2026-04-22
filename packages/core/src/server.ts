@@ -18,7 +18,6 @@ import { Scalar } from "@scalar/hono-api-reference";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-import { requestId } from "hono/request-id";
 import { routePath } from "hono/route";
 import { stream } from "hono/streaming";
 // Type-only Zod imports (optional peer dep)
@@ -40,7 +39,67 @@ import {
 	type RequestSchemas,
 	type ResponsesMap,
 } from "./openapi/registry.ts";
+import {
+	clearRequestContext,
+	getActiveLayouts,
+	getCurrentFilePath,
+	getRequestContext,
+	getRequestEvent,
+	type LayoutComponent,
+	setActiveLayouts,
+	setCurrentFilePath,
+	setRequestContext,
+} from "./server/context.ts";
+import type {
+	EffectiveSchemas,
+	InferResponse,
+	InferResponses,
+	InferResponseType,
+	ResponseForStatus,
+	RouteSpec,
+	SchemaDefinition,
+	ValidResponse,
+	ValidStatusCodes,
+	WithOpenAPI,
+} from "./server/route-spec.ts";
+import {
+	formatIssues,
+	type InferInput,
+	type InferOutput,
+	type Issue,
+	toStandardSchema,
+	validatePart,
+} from "./server/schema.ts";
 import { createLogger } from "./utils/logger.ts";
+
+// Re-export the context surface so long-time consumers that imported
+// these symbols from `@ts-api-kit/core/server` keep working unchanged.
+export {
+	clearRequestContext,
+	getActiveLayouts,
+	getCurrentFilePath,
+	getRequestContext,
+	getRequestEvent,
+	setActiveLayouts,
+	setCurrentFilePath,
+	setRequestContext,
+};
+export type { LayoutComponent };
+// Re-export schema interop so consumers keep their existing imports.
+export { formatIssues, toStandardSchema };
+export type { InferInput, InferOutput, Issue };
+// Re-export route spec types so consumers keep their existing imports.
+export type {
+	InferResponse,
+	InferResponses,
+	InferResponseType,
+	ResponseForStatus,
+	RouteSpec,
+	SchemaDefinition,
+	ValidResponse,
+	ValidStatusCodes,
+	WithOpenAPI,
+};
 /**
  * ──────────────────────────────────────────────────────────────────────────────
  * Error + tiny helpers
@@ -86,110 +145,8 @@ export const error = (
 	throw new AppError(code, message, meta);
 };
 
-let currentContext: Context | null = null;
-let currentFilePath: string | null = null;
-// Track active layout chain per request context
-export type LayoutComponent = (props: {
-	children: unknown;
-}) => unknown | Promise<unknown>;
-const layoutsByContext = new WeakMap<Context, LayoutComponent[]>();
-
-/**
- * Sets the current request context for the application.
- * This is used internally to track the current Hono context.
- *
- * @param c - The Hono context to set as current
- */
-export const setRequestContext = (c: Context): void => {
-	currentContext = c;
-};
-
-/**
- * Sets the current file path being processed.
- * This is used for tracking which route file is currently being executed.
- *
- * @param filePath - The file path to set as current
- */
-export const setCurrentFilePath = (filePath: string): void => {
-	currentFilePath = filePath;
-};
-
-/**
- * Associates an ordered list of layout components with the given request context.
- * The list should be ordered from root-most to leaf-most.
- */
-export const setActiveLayouts = (
-	c: Context,
-	layouts: LayoutComponent[],
-): void => {
-	layoutsByContext.set(c, layouts);
-};
-
-/**
- * Gets active layouts for the current request context (root → leaf order).
- */
-const getActiveLayouts = (): LayoutComponent[] => {
-	if (!currentContext) return [];
-	return layoutsByContext.get(currentContext) ?? [];
-};
-
-/**
- * Gets the current file path being processed.
- *
- * @returns The current file path or null if not set
- */
-export const getCurrentFilePath = (): string | null => {
-	return currentFilePath;
-};
-
-/**
- * Gets the current request event with cookies, headers, and other request data.
- *
- * @returns The current request event object
- */
-export const getRequestEvent = (): {
-	rid: MiddlewareHandler;
-	cookies: {
-		get: (name: string) => string | undefined;
-		set: (name: string, value: string) => void;
-	};
-	locals: { title: string };
-	headers?: Record<string, string>;
-	url?: string;
-	method?: string;
-} => {
-	const rid = requestId();
-	if (!currentContext) {
-		return {
-			rid,
-			cookies: {
-				get: (_name: string) => undefined,
-				set: (_name: string, _value: string) => {},
-			},
-			locals: { title: "Default Title" },
-		} as const;
-	}
-
-	return {
-		rid,
-		cookies: {
-			get: (name: string) =>
-				currentContext?.req
-					.header("cookie")
-					?.split(";")
-					.find((c) => c.trim().startsWith(`${name}=`))
-					?.split("=")[1],
-			set: (name: string, value: string) =>
-				currentContext?.header("Set-Cookie", `${name}=${value}`),
-		},
-		locals: { title: "Default Title" },
-		headers: Object.fromEntries(Object.entries(currentContext?.req.header())),
-		url: currentContext?.req.url,
-		method: currentContext?.req.method,
-	} as const;
-};
-
-Response;
+// Request context, layout chain, and request-event helpers now live in
+// `./server/context.ts` (re-exported above for backwards compatibility).
 /**
  * Creates a JSON response with the provided data.
  *
@@ -607,14 +564,15 @@ export const createResponseTools = <
 export const jsxStream = (
 	html: (rid: number | string) => string | Promise<string>,
 ): Response => {
-	if (!currentContext) {
+	const ctx = getRequestContext();
+	if (!ctx) {
 		throw new Error("jsxStream must be called within a request context");
 	}
 
-	currentContext.header("Content-Type", "text/html; charset=utf-8");
+	ctx.header("Content-Type", "text/html; charset=utf-8");
 	const htmlStream = renderToStream(html);
 
-	return stream(currentContext, async (stream) => {
+	return stream(ctx, async (stream) => {
 		for await (const chunk of htmlStream) {
 			stream.write(chunk);
 		}
@@ -644,270 +602,16 @@ export const jsxStreamHono = (
 	});
 };
 
-/**
- * ──────────────────────────────────────────────────────────────────────────────
- * Pure StandardSchemaV1 interop + strong inference
- * ──────────────────────────────────────────────────────────────────────────────
- */
+// Standard Schema interop (zod/valibot detection, adapter, validation,
+// issue formatting) now lives in `./server/schema.ts`. The helpers are
+// imported at the top of this file and re-exported for consumers.
 
-/**
- * Infers the input type from a StandardSchemaV1 schema.
- *
- * @template S - The schema type
- * @returns The inferred input type
- */
-export type InferInput<S> = S extends StandardSchemaV1<unknown, unknown>
-	? StandardSchemaV1.InferInput<S>
-	: S extends ZodTypeAny
-		? z.input<S>
-		: unknown;
-
-/**
- * Infers the output type from a StandardSchemaV1 schema.
- *
- * @template S - The schema type
- * @returns The inferred output type
- */
-export type InferOutput<S> = S extends StandardSchemaV1<unknown, unknown>
-	? StandardSchemaV1.InferOutput<S>
-	: S extends ZodTypeAny
-		? z.output<S>
-		: unknown;
-
-function isStandard(s: unknown): s is AnySchema {
-	return (
-		typeof s === "object" &&
-		s !== null &&
-		typeof (s as { [k: string]: unknown })["~standard"] === "object" &&
-		((s as { [k: string]: unknown })["~standard"] as { version?: unknown })
-			?.version === 1
-	);
-}
-
-// Zod runtime detection (optional)
-function isZodSchema(s: unknown): s is ZodTypeAny {
-	return (
-		!!s &&
-		typeof s === "object" &&
-		typeof (s as { safeParse?: unknown }).safeParse === "function" &&
-		typeof (s as { parse?: unknown }).parse === "function" &&
-		"_def" in (s as object)
-	);
-}
-
-// Adapt a Zod schema to StandardSchemaV1 to reuse common validation
-function zodToStandard<S extends ZodTypeAny>(
-	schema: S,
-	vendor = "hono-file-router",
-): StandardSchemaV1<z.input<S>, z.output<S>> {
-	return {
-		"~standard": {
-			version: 1,
-			vendor,
-			validate: (value: unknown) => {
-				const r = (schema as ZodTypeAny).safeParse(value) as {
-					success: boolean;
-					data?: unknown;
-					error?: { issues?: unknown[] };
-				};
-				if (r.success) return { value: r.data } as const;
-				return { issues: (r.error?.issues ?? []) as unknown[] } as const;
-			},
-		},
-	} as unknown as StandardSchemaV1<z.input<S>, z.output<S>>;
-}
-
-// DX: stable issue shape
-/**
- * Normalised validation issue shape used in error responses.
- */
-export type Issue = {
-	message: string;
-	path: (string | number)[];
-	expected?: string;
-	received?: unknown;
-	type?: string;
-	kind?: string;
-};
-
-function formatIssues(raw: ReadonlyArray<unknown> = []): Issue[] {
-	type LooseIssue = {
-		message?: unknown;
-		path?: unknown;
-		expected?: unknown;
-		received?: unknown;
-		type?: unknown;
-		kind?: unknown;
-	};
-	return raw.map((i) => {
-		const ii = i as LooseIssue;
-		const path = Array.isArray(ii.path)
-			? (ii.path as unknown[]).map((p) => {
-					const pk = (p as { key?: unknown }).key;
-					return typeof pk !== "undefined"
-						? (pk as string | number)
-						: (p as string | number);
-				})
-			: [];
-		return {
-			message: String(ii.message ?? ""),
-			path,
-			expected: typeof ii.expected === "string" ? ii.expected : undefined,
-			received: ii.received,
-			type: typeof ii.type === "string" ? ii.type : undefined,
-			kind: typeof ii.kind === "string" ? ii.kind : undefined,
-		};
-	});
-}
-
-// Per-part validation (params/query/headers/body) with location
-async function validatePart<S extends AnySchema>(
-	where: "params" | "query" | "headers" | "body",
-	schema: S | undefined,
-	value: unknown,
-): Promise<{
-	value: unknown;
-	issues: null | { location: typeof where; issues: Issue[] };
-}> {
-	if (!schema) return { value, issues: null };
-	// Auto-adapt Zod to Standard when provided
-	const effective = isStandard(schema)
-		? schema
-		: isZodSchema(schema)
-			? (zodToStandard(
-					schema as ZodTypeAny,
-					`hono-file-router:${where}`,
-				) as unknown as AnySchema)
-			: schema;
-
-	if (!isStandard(effective)) {
-		return {
-			value: null,
-			issues: {
-				location: where,
-				issues: [
-					{
-						message:
-							"Schema must implement StandardSchemaV1 or be a Zod schema",
-						path: [],
-					},
-				],
-			},
-		};
-	}
-
-	const std = (effective as { [k: string]: unknown })["~standard"] as {
-		validate: (v: unknown) => unknown | Promise<unknown>;
-	};
-	let r = std.validate(value);
-	if (r instanceof Promise) r = await r;
-
-	const fail = r as StandardSchemaV1.FailureResult;
-	if ("issues" in (fail as object)) {
-		return {
-			value: null,
-			issues: { location: where, issues: formatIssues(fail.issues) },
-		};
-	}
-	return {
-		value: (r as StandardSchemaV1.SuccessResult<unknown>).value,
-		issues: null,
-	};
-}
-
-/**
- * Wraps a Valibot schema with the Standard Schema interface used by hono and
- * Scalar so validations and documentation share the same contract.
- *
- * @param schema - Valibot schema to adapt
- * @param vendor - Namespace used to tag the generated schema
- * @returns The schema decorated with StandardSchemaV1 metadata
- */
-export function toStandardSchema<S extends AnySchema>(
-	schema: S,
-	vendor = "hono-file-router",
-): StandardSchemaV1<InferInput<S>, InferOutput<S>> {
-	// Already a Standard schema: just ensure vendor tag
-	if (isStandard(schema)) {
-		const std = (schema as { [k: string]: unknown })["~standard"] as {
-			vendor?: string;
-			[k: string]: unknown;
-		};
-		return {
-			"~standard": {
-				...std,
-				vendor: std.vendor ?? vendor,
-			},
-		} as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
-	}
-	// Zod -> Standard adapter
-	if (isZodSchema(schema)) {
-		return zodToStandard(
-			schema as ZodTypeAny,
-			vendor,
-		) as unknown as StandardSchemaV1<InferInput<S>, InferOutput<S>>;
-	}
-	throw new Error("Schema must implement StandardSchemaV1 or be a Zod schema");
-}
-
-/**
- * ──────────────────────────────────────────────────────────────────────────────
- * Route schema + handler inference (Standard-only)
- * ──────────────────────────────────────────────────────────────────────────────
- */
-
-/**
- * Defines the schema structure for request validation.
- * Each property represents a different part of the HTTP request.
- */
-export type SchemaDefinition = {
-	query?: StandardSchemaV1<unknown, unknown>;
-	params?: StandardSchemaV1<unknown, unknown>;
-	headers?: StandardSchemaV1<unknown, unknown>;
-	body?: StandardSchemaV1<unknown, unknown>;
-};
-
-// Tipos de OpenAPI (reusados no registry)
-/**
- * Extends SchemaDefinition with OpenAPI metadata for documentation generation.
- */
-export type WithOpenAPI = {
-	openapi?: {
-		method?: HttpMethod; // Now optional - will be inferred from export name
-		summary?: string;
-		tags?: string[];
-		request?: RequestSchemas;
-		responses?: ResponsesMap;
-	};
-} & SchemaDefinition;
-
-/**
- * Union type for route specifications, supporting both basic and OpenAPI-enhanced schemas.
- */
-export type RouteSpec = SchemaDefinition | WithOpenAPI;
-
-type EffectiveSchemas<T extends RouteSpec> = {
-	query: T extends { openapi: { request: { query: infer Q } } }
-		? Q
-		: T extends { query: infer Q }
-			? Q
-			: never;
-	params: T extends { openapi: { request: { params: infer P } } }
-		? P
-		: T extends { params: infer P }
-			? P
-			: never;
-	headers: T extends { openapi: { request: { headers: infer H } } }
-		? H
-		: T extends { headers: infer H }
-			? H
-			: never;
-	body: T extends { openapi: { request: { body: infer B } } }
-		? B
-		: T extends { body: infer B }
-			? B
-			: never;
-};
+// Most route specification types (`SchemaDefinition`, `WithOpenAPI`,
+// `RouteSpec`, `ValidStatusCodes`, etc.) now live in
+// `./server/route-spec.ts`. They're imported at the top of this file
+// and re-exported above for backward compatibility. `HandlerContext`
+// stays here because it references `ResponseTools`, which is defined
+// alongside the response helpers in this file.
 
 /**
  * Strongly-typed context passed to route handlers after validation.
@@ -941,69 +645,6 @@ export type HandlerContext<T extends RouteSpec> = {
 			: unknown;
 	response: ResponseTools<T>;
 };
-
-/**
- * Extracts the concrete type from a response marker.
- */
-export type InferResponseType<T> = T extends { __phantom__: infer U }
-	? U
-	: never;
-/**
- * Maps the response markers declared in the route spec to plain types.
- */
-export type InferResponses<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
-}
-	? {
-			[K in keyof R]: R[K] extends { __phantom__: infer U } ? U : never;
-		}
-	: never;
-/**
- * Union of all declared response payloads for the route.
- */
-export type ValidResponse<T extends RouteSpec> =
-	| InferResponses<T>[keyof InferResponses<T>]
-	| Response;
-/**
- * Extracts the response payload type for a specific status code.
- */
-export type ResponseForStatus<
-	T extends RouteSpec,
-	S extends number,
-> = T extends { openapi: { responses: infer R } }
-	? S extends keyof R
-		? R[S] extends { __phantom__: infer U }
-			? U
-			: never
-		: never
-	: never;
-/**
- * Extracts the declared status codes for the route.
- */
-export type ValidStatusCodes<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
-}
-	? keyof R extends number
-		? keyof R
-		: never
-	: never;
-/**
- * Extracts the response type for a given status or falls back to default.
- */
-export type InferResponse<
-	T extends RouteSpec,
-	S extends number = 200,
-> = T extends { openapi: { responses: infer R } }
-	? R extends ResponsesMap
-		? S extends keyof R
-			? R[S] extends ResponseMarker<infer U>
-				? U
-				: unknown
-			: R extends { default: ResponseMarker<infer DU> }
-				? DU
-				: unknown
-		: unknown
-	: unknown;
 
 function pickContentType(req: {
 	header: (name: string) => string | undefined;
@@ -1215,10 +856,7 @@ export function createHandler<T extends RouteSpec>(
 			);
 		} finally {
 			// clear context and forget layouts for this request
-			if (currentContext) {
-				layoutsByContext.delete(currentContext);
-			}
-			currentContext = null;
+			clearRequestContext();
 		}
 	};
 }
