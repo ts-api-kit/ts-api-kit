@@ -67,9 +67,17 @@ export const SIDEBAR_SECTIONS: SidebarNavSection[] = [
 	{
 		title: 'Resources',
 		items: [
-			{ title: 'Examples', href: 'https://github.com/ts-api-kit/ts-api-kit/tree/main/examples', external: true },
+			{
+				title: 'Examples',
+				href: 'https://github.com/ts-api-kit/ts-api-kit/tree/main/examples',
+				external: true
+			},
 			{ title: 'API reference', href: 'https://jsr.io/@ts-api-kit/core', external: true },
-			{ title: 'Discussions', href: 'https://github.com/ts-api-kit/ts-api-kit/discussions', external: true }
+			{
+				title: 'Discussions',
+				href: 'https://github.com/ts-api-kit/ts-api-kit/discussions',
+				external: true
+			}
 		]
 	}
 ];
