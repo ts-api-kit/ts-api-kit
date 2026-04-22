@@ -6,14 +6,12 @@
 // share types without circular imports.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { ZodTypeAny, z } from "zod";
 import type { ResponseMarker } from "../openapi/markers.ts";
 import type {
 	HttpMethod,
 	RequestSchemas,
 	ResponsesMap,
 } from "../openapi/registry.ts";
-import type { InferOutput } from "./schema.ts";
 
 /**
  * Defines the schema structure for request validation.
