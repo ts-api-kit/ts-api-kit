@@ -55,10 +55,6 @@ const config = defineConfig({
                   title: "ts-api-compiler",
                   to: "/packages/ts-api-compiler",
                 },
-                {
-                  title: "openapi-to-remote",
-                  to: "/packages/openapi-to-remote",
-                },
               ],
             },
             {
@@ -88,10 +84,6 @@ const config = defineConfig({
                 {
                   title: "Simple Example",
                   to: "/examples/simple-example",
-                },
-                {
-                  title: "Frontend Example",
-                  to: "/examples/frontend-example",
                 },
               ],
             },
