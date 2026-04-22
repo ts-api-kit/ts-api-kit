@@ -25,7 +25,6 @@ import type { ZodTypeAny, z } from "zod";
 import { mountFileRouter } from "./file-router.ts";
 import { resolveErrorForPath, resolveNotFoundForPath } from "./hooks.ts";
 import type { OpenAPIBuilder } from "./openapi/builder.ts";
-import type { ResponseMarker } from "./openapi/markers.ts";
 import {
 	getDefaultOpenAPI,
 	getOpenAPIGeneration,
@@ -36,8 +35,6 @@ import {
 	buildOpenAPIDocument,
 	type HttpMethod,
 	lazyRegister,
-	type RequestSchemas,
-	type ResponsesMap,
 } from "./openapi/registry.ts";
 import {
 	clearRequestContext,
@@ -1559,7 +1556,7 @@ export default class Server {
 	 * const res = await s.fetch(new Request("http://example/"));
 	 * ```
 	 */
-	fetch = (req: Request): Promise<Response> => {
+	fetch = async (req: Request): Promise<Response> => {
 		return this.app.fetch(req);
 	};
 }

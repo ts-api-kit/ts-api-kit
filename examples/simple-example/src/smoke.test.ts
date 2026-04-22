@@ -6,8 +6,8 @@
 
 import assert from "node:assert/strict";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { Server } from "@ts-api-kit/core";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -18,9 +18,7 @@ describe("simple-example smoke", () => {
 		const server = new Server();
 		await server.configureRoutes(routesDir);
 
-		const res = await server.fetch(
-			new Request("http://localhost/users/42"),
-		);
+		const res = await server.fetch(new Request("http://localhost/users/42"));
 		assert.equal(res.status, 200);
 		assert.ok(res.headers.get("content-type")?.includes("application/json"));
 
