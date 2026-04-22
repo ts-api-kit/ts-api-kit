@@ -47,7 +47,7 @@ export function scanRoutes(routesDir: string): {
 	const configs: SpecialFileInfo[] = [];
 	const errors: SpecialFileInfo[] = [];
 	const notFounds: SpecialFileInfo[] = [];
-	
+
 	let routeCounter = 0;
 	let mwCounter = 0;
 	let cfgCounter = 0;
@@ -66,13 +66,13 @@ export function scanRoutes(routesDir: string): {
 			} else {
 				const relativePath = path.relative(routesDir, fullPath);
 				const dirPath = path.dirname(relativePath);
-				const basePath = deriveOpenAPIPath(
-					path.join(dirPath, "+route.ts"),
-				);
+				const basePath = deriveOpenAPIPath(path.join(dirPath, "+route.ts"));
 
 				if (item === "+route.ts" || item === "+route.tsx") {
 					const openapiPath = deriveOpenAPIPath(relativePath);
-					const methods = extractHTTPMethods(fs.readFileSync(fullPath, "utf-8"));
+					const methods = extractHTTPMethods(
+						fs.readFileSync(fullPath, "utf-8"),
+					);
 					routes.push({
 						filePath: relativePath.replace(/\\/g, "/"),
 						openapiPath,
@@ -221,16 +221,20 @@ export function generateRouteMapperCode(
 
 	// Generate middleware and config registrations
 	const mwRegistrations = [
-		...middleware.map((m) => `  // Middleware: ${m.filePath}
+		...middleware.map(
+			(m) => `  // Middleware: ${m.filePath}
   if (${m.importId}.default || ${m.importId}.middleware) {
     const mw = ${m.importId}.default || ${m.importId}.middleware;
     app.use("${basePath}${m.basePath}/*", mw as any);
-  }`),
-		...configs.map((c) => `  // Config: ${c.filePath}
+  }`,
+		),
+		...configs.map(
+			(c) => `  // Config: ${c.filePath}
   if (${c.importId}.config || ${c.importId}.CONFIG || ${c.importId}.default) {
     // Note: Configs need special handling - may require @ts-api-kit/core's configToMiddleware
     console.warn("Config files require manual handling in static mode: ${c.filePath}");
-  }`),
+  }`,
+		),
 	].join("\n\n");
 
 	// Generate route registrations
@@ -250,29 +254,30 @@ ${methods}`;
 		})
 		.join("\n\n");
 
-	// Generate error and not-found registrations  
+	// Generate error and not-found registrations
 	const errorRegistrations = [
-		...errors.map((e) => `  // Error handler: ${e.filePath}
-  // @ts-expect-error - Dynamic handler resolution
-  if (${e.importId}.onError || ${e.importId}.ERROR || ${e.importId}.default) {
-    // @ts-expect-error - Dynamic handler resolution
-    const handler = ${e.importId}.onError || ${e.importId}.ERROR || ${e.importId}.default;
-    app.onError(handler as any);
-  }`),
-		...notFounds.map((n) => `  // Not found handler: ${n.filePath}
-  // @ts-expect-error - Dynamic handler resolution
-  if (${n.importId}.notFound || ${n.importId}.NOT_FOUND || ${n.importId}.default) {
-    // @ts-expect-error - Dynamic handler resolution
-    const handler = ${n.importId}.notFound || ${n.importId}.NOT_FOUND || ${n.importId}.default;
-    app.notFound(handler as any);
-  }`),
+		...errors.map(
+			(e) => `  // Error handler: ${e.filePath}
+  if (${e.importId}.default) {
+    app.onError(${e.importId}.default as any);
+  }`,
+		),
+		...notFounds.map(
+			(n) => `  // Not found handler: ${n.filePath}
+  if (${n.importId}.default) {
+    app.notFound(${n.importId}.default as any);
+  }`,
+		),
 	].join("\n\n");
 
 	const allSections = [
 		mwRegistrations && `  // === Middleware & Configs ===\n${mwRegistrations}`,
 		routeRegistrations && `  // === Routes ===\n${routeRegistrations}`,
-		errorRegistrations && `  // === Error & Not Found Handlers ===\n${errorRegistrations}`,
-	].filter(Boolean).join("\n\n");
+		errorRegistrations &&
+			`  // === Error & Not Found Handlers ===\n${errorRegistrations}`,
+	]
+		.filter(Boolean)
+		.join("\n\n");
 
 	return `/**
  * Auto-generated route mapper for Cloudflare Workers
@@ -296,8 +301,11 @@ ${allImports}
  * 
  * @param app - The Hono application instance
  */
-export function registerRoutes(app: Hono): void {
+export function registerRoutes<E extends Record<string, any> = any, S = {}, BasePath extends string = "/">(
+  app: Hono<E, S, BasePath>
+): Hono<E, S, BasePath> {
 ${allSections || "  // No routes found"}
+  return app;
 }
 
 /**
@@ -346,9 +354,7 @@ export function generateRouteMapper(options: {
 	const absoluteRoutesDir = path.resolve(options.routesDir);
 
 	if (!fs.existsSync(absoluteRoutesDir)) {
-		throw new Error(
-			`Routes directory not found: ${absoluteRoutesDir}`,
-		);
+		throw new Error(`Routes directory not found: ${absoluteRoutesDir}`);
 	}
 
 	console.log(`🔍 Scanning routes in: ${absoluteRoutesDir}`);
@@ -360,7 +366,7 @@ export function generateRouteMapper(options: {
 	console.log(`   Configs: ${scanned.configs.length}`);
 	console.log(`   Errors: ${scanned.errors.length}`);
 	console.log(`   Not-founds: ${scanned.notFounds.length}`);
-	
+
 	for (const route of scanned.routes) {
 		console.log(
 			`   ${route.openapiPath} (${route.methods.join(", ")}) - ${route.filePath}`,
@@ -375,7 +381,7 @@ export function generateRouteMapper(options: {
 	});
 
 	const absoluteOutputPath = path.resolve(options.outputPath);
-	
+
 	// Only write if content changed to avoid triggering unnecessary rebuilds
 	let shouldWrite = true;
 	if (fs.existsSync(absoluteOutputPath)) {
@@ -390,4 +396,3 @@ export function generateRouteMapper(options: {
 		console.log(`ℹ️  Route mapper unchanged: ${absoluteOutputPath}`);
 	}
 }
-
