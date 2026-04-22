@@ -5,6 +5,18 @@ import type * as z from "zod";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
 import { createLogger } from "../utils/logger.ts";
 import type { ResponseMarker } from "./markers.ts";
+import {
+	isZodLiteral,
+	isZodOptional,
+	zodArrayElement,
+	zodEnumValues,
+	zodInnerType,
+	zodLiteralValues,
+	zodPipeInput,
+	zodShape,
+	zodTypeName,
+	zodUnionOptions,
+} from "./schema-introspection.ts";
 
 // Local, safer alias for generic response typing
 type AnySchema = unknown;
@@ -201,105 +213,86 @@ export const vToJsonSchema = (
 	}
 };
 
-// Basic Zod -> JSON Schema converter for common types used by the kit
+// Basic Zod -> JSON Schema converter for common types used by the kit.
+// Targets zod v4, which exposes its metadata via `.def` with lowercase
+// `type` names. All introspection goes through the helpers in
+// `schema-introspection.ts` — this function never reads `_def` directly.
+
 type ZodAny = z.ZodTypeAny;
-type ZodObjectDef = {
-	typeName: string;
-	shape?: () => Record<string, ZodAny>;
-};
 
 function isZodSchema(s: unknown): s is ZodAny {
 	return (
 		!!s &&
 		typeof s === "object" &&
 		typeof (s as { safeParse?: unknown }).safeParse === "function" &&
-		"_def" in (s as object)
+		// zod v4 exposes `def` directly; legacy `_def` kept for detection of
+		// any v3-shaped imposters (we still treat them as zod for dispatch).
+		("def" in (s as object) || "_def" in (s as object))
 	);
 }
 
-export const zToJsonSchema = (schema: ZodAny): Json => {
-	const s = schema as ZodAny & {
-		_def: {
-			typeName: string;
-			innerType?: ZodAny;
-			type?: ZodAny;
-			options?: ZodAny[];
-			values?: unknown[];
-			schema?: ZodAny;
-			shape?: () => Record<string, ZodAny>;
-		};
-	};
-	const t = s._def?.typeName;
+const primitiveEnum = (values: readonly unknown[]): Record<string, unknown> => {
+	const out: Record<string, unknown> = { enum: [...values] };
+	const ty = typeof values[0];
+	if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
+	return out;
+};
 
-	switch (t) {
-		case "ZodString":
+export const zToJsonSchema = (schema: ZodAny): Json => {
+	switch (zodTypeName(schema)) {
+		case "string":
 			return { type: "string" };
-		case "ZodNumber":
+		case "number":
 			return { type: "number" };
-		case "ZodBoolean":
+		case "boolean":
 			return { type: "boolean" };
-		case "ZodUnknown":
-		case "ZodAny":
+		case "unknown":
+		case "any":
 			return {};
-		case "ZodArray": {
-			const item = (s._def as { type?: ZodAny }).type;
-			return { type: "array", items: item ? zToJsonSchema(item) : {} };
+		case "array": {
+			const item = zodArrayElement(schema);
+			return {
+				type: "array",
+				items: item ? zToJsonSchema(item as ZodAny) : {},
+			};
 		}
-		case "ZodLiteral": {
-			const val = (
-				s._def as { value?: unknown } as unknown as { value?: unknown }
-			).value;
-			const out: Record<string, unknown> = { enum: [val] };
-			const ty = typeof val;
-			if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
-			return out as unknown as Json;
+		case "literal": {
+			const values = zodLiteralValues(schema) ?? [];
+			return primitiveEnum(values) as unknown as Json;
 		}
-		case "ZodEnum": {
-			const values = (s._def as { values?: unknown[] }).values ?? [];
-			const out: Record<string, unknown> = { enum: values };
-			const ty = typeof values[0];
-			if (ty === "string" || ty === "number" || ty === "boolean") out.type = ty;
-			return out as unknown as Json;
+		case "enum": {
+			const values = zodEnumValues(schema) ?? [];
+			return primitiveEnum(values) as unknown as Json;
 		}
-		case "ZodUnion": {
-			const opts = (s._def as { options?: ZodAny[] }).options ?? [];
-			// collapse union of literals to enum when possible
-			const allLiteral =
-				opts.length &&
-				opts.every((o) => (o as any)?._def?.typeName === "ZodLiteral");
-			if (allLiteral) {
-				const values = opts.map((o) => (o as any)?._def?.value);
-				const out: Record<string, unknown> = { enum: values };
-				const ty = typeof values[0];
-				if (ty === "string" || ty === "number" || ty === "boolean")
-					out.type = ty;
-				return out as unknown as Json;
+		case "union": {
+			const opts = (zodUnionOptions(schema) ?? []) as ZodAny[];
+			// collapse union of literals to a typed enum when every branch is
+			// a single literal (the common shape for discriminator-style unions).
+			if (opts.length && opts.every(isZodLiteral)) {
+				const values = opts.flatMap((o) => zodLiteralValues(o) ?? []);
+				return primitiveEnum(values) as unknown as Json;
 			}
-			return { anyOf: opts.map((o) => zToJsonSchema(o)) } as unknown as Json;
+			return {
+				anyOf: opts.map((o) => zToJsonSchema(o)),
+			} as unknown as Json;
 		}
-		case "ZodOptional": {
-			const inner = (s._def as { innerType?: ZodAny }).innerType;
-			return inner ? zToJsonSchema(inner) : {};
+		case "optional":
+		case "default": {
+			const inner = zodInnerType(schema);
+			return inner ? zToJsonSchema(inner as ZodAny) : {};
 		}
-		case "ZodDefault": {
-			const inner = (s._def as { innerType?: ZodAny }).innerType;
-			return inner ? zToJsonSchema(inner) : {};
-		}
-		case "ZodNullable": {
-			const inner = (s._def as { innerType?: ZodAny }).innerType;
-			const base = inner ? zToJsonSchema(inner) : {};
-			// basic nullable handling (OpenAPI 3.1)
+		case "nullable": {
+			const inner = zodInnerType(schema);
+			const base = inner ? zToJsonSchema(inner as ZodAny) : {};
 			return { anyOf: [base, { type: "null" }] } as unknown as Json;
 		}
-		case "ZodObject": {
-			const def = s._def as unknown as ZodObjectDef;
-			const shape = (schema as any).shape ?? def.shape?.();
+		case "object": {
+			const shape = zodShape(schema) ?? {};
 			const props: Record<string, Json> = {};
 			const required: string[] = [];
-			for (const [k, child] of Object.entries(shape ?? {})) {
+			for (const [k, child] of Object.entries(shape)) {
 				props[k] = zToJsonSchema(child as ZodAny);
-				const ct = (child as any)?._def?.typeName;
-				if (ct !== "ZodOptional") required.push(k);
+				if (!isZodOptional(child)) required.push(k);
 			}
 			const out: Record<string, unknown> = {
 				type: "object",
@@ -308,9 +301,12 @@ export const zToJsonSchema = (schema: ZodAny): Json => {
 			if (required.length) (out as { required?: string[] }).required = required;
 			return out as unknown as Json;
 		}
-		case "ZodEffects": {
-			const inner = (s._def as { schema?: ZodAny }).schema;
-			return inner ? zToJsonSchema(inner) : {};
+		case "pipe": {
+			// zod v4 transforms live in a `pipe` whose `in` is the source schema
+			// and `out` is the transform itself. We document the input type
+			// because that is what an OpenAPI client actually sends.
+			const input = zodPipeInput(schema);
+			return input ? zToJsonSchema(input as ZodAny) : {};
 		}
 		default:
 			return {};
@@ -751,13 +747,10 @@ function zodObjectToParams(
 	where: "query" | "path" | "header",
 	filePath?: string,
 ): ParameterObject[] {
-	const entries: Record<string, z.ZodTypeAny> =
-		(schema as any)?.shape ?? (schema as any)?._def?.shape?.() ?? {};
+	const entries = (zodShape(schema) ?? {}) as Record<string, z.ZodTypeAny>;
 	const out: ParameterObject[] = [];
 	for (const [name, sch] of Object.entries(entries)) {
-		const typeName = (sch as any)?._def?.typeName as string | undefined;
-		const isOptional = typeName === "ZodOptional";
-		const required = !isOptional && where !== "header";
+		const required = !isZodOptional(sch) && where !== "header";
 		const jsonSchema = zToJsonSchema(sch as z.ZodTypeAny);
 		const param: ParameterObject = {
 			name,
