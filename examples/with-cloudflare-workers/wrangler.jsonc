@@ -8,7 +8,7 @@
   "compatibility_date": "2025-10-06",
   "build": {
     "command": "pnpm run build"
-  }
+  },
 
   // "compatibility_flags": [
   //   "nodejs_compat"
@@ -28,13 +28,13 @@
   //     "bucket_name": "my-bucket"
   //   }
   // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
+  "d1_databases": [
+    {
+      "binding": "TEST_DB",
+      "database_name": "test-db",
+      "database_id": "a1e7be28-b619-48b0-92fb-b0774493f90c"
+    }
+  ],
   // "ai": {
   //   "binding": "AI"
   // },
