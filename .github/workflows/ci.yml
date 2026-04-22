@@ -58,11 +58,14 @@ jobs:
         with:
           run_install: false
 
+      # No `cache: pnpm` here on purpose — this job never runs
+      # `pnpm install`, so the cache path check fails during Post-Setup
+      # and flips the whole job to FAILURE even when the actual
+      # changeset check exited 0.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: pnpm
 
       # Changesets CLI is already a devDependency at the repo root.
       # No need to add it during CI; this job only checks for presence of changeset files.

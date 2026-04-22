@@ -25,7 +25,6 @@ import type { ZodTypeAny, z } from "zod";
 import { mountFileRouter } from "./file-router.ts";
 import { resolveErrorForPath, resolveNotFoundForPath } from "./hooks.ts";
 import type { OpenAPIBuilder } from "./openapi/builder.ts";
-import type { ResponseMarker } from "./openapi/markers.ts";
 import {
 	getDefaultOpenAPI,
 	getOpenAPIGeneration,
@@ -36,8 +35,6 @@ import {
 	buildOpenAPIDocument,
 	type HttpMethod,
 	lazyRegister,
-	type RequestSchemas,
-	type ResponsesMap,
 } from "./openapi/registry.ts";
 import {
 	clearRequestContext,
@@ -1547,4 +1544,19 @@ export default class Server {
 		);
 		serve({ fetch: this.app.fetch, port: finalPort });
 	}
+
+	/**
+	 * Dispatches a `Request` through the internal Hono app without binding
+	 * to a port. Useful for smoke tests and in-process integration tests.
+	 *
+	 * @example
+	 * ```ts
+	 * const s = new Server();
+	 * await s.configureRoutes("./src/routes");
+	 * const res = await s.fetch(new Request("http://example/"));
+	 * ```
+	 */
+	fetch = async (req: Request): Promise<Response> => {
+		return this.app.fetch(req);
+	};
 }
