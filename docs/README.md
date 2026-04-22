@@ -1,29 +1,38 @@
-# TS API Core Documentation
+# sv
 
-Documentação completa do TS API Core, um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot.
+Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
 
-## Executando a Documentação
+## Creating a project
 
-```bash
-# Instalar dependências
-npm install
+If you're seeing this, you've probably already done this step. Congrats!
 
-# Executar em modo de desenvolvimento
+```sh
+# create a new project in the current directory
+npx sv create
+
+# create a new project in my-app
+npx sv create my-app
+```
+
+## Developing
+
+Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+
+```sh
 npm run dev
 
-# Build para produção
+# or start the server and open the app in a new browser tab
+npm run dev -- --open
+```
+
+## Building
+
+To create a production version of your app:
+
+```sh
 npm run build
 ```
 
-## Estrutura
+You can preview the production build with `npm run preview`.
 
-- **Getting Started** - Instalação e primeiros passos
-- **Packages** - Documentação dos pacotes principais
-- **Guides** - Guias detalhados de uso
-- **Examples** - Exemplos práticos de implementação
-
-## Tecnologias
-
-- [SveltePress](https://sveltepress.site/) - Gerador de documentação
-- [SvelteKit](https://kit.svelte.dev/) - Framework web
-- [TypeScript](https://www.typescriptlang.org/) - Linguagem de programação
+> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

@@ -1,0 +1,21 @@
+{
+  "name": "with-cloudflare-workers",
+  "type": "module",
+  "scripts": {
+    "generate:routes": "ts-api-compiler generate-routes --routes ./src/routes --output ./src/routes.generated.ts",
+    "dev": "pnpm generate:routes && wrangler dev",
+    "build": "pnpm generate:routes",
+    "deploy": "pnpm build && wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  },
+  "dependencies": {
+    "@ts-api-kit/core": "workspace:*",
+    "hono": "^4.9.10",
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@ts-api-kit/compiler": "workspace:*",
+    "@types/node": "^24.7.0",
+    "wrangler": "^4.4.0"
+  }
+}

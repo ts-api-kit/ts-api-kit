@@ -54,6 +54,7 @@
     "dev:bun": "bun --watch src/index.ts",
     "dev:deno": "deno run -A --watch src/index.ts",
     "build": "tsc",
+    "build:bun": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile app src/index.ts",
     "start": "node dist/index.js",
     "lint": "cd ../../ && biome check examples/simple-example",
     "lint:fix": "cd ../../ && biome check examples/simple-example --write",

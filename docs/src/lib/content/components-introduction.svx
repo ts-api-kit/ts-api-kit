@@ -1,0 +1,547 @@
+---
+sections:
+  - id: overview
+    title: Overview
+  - id: installation
+    title: Installation
+  - id: first-route
+    title: First route
+  - id: project-structure
+    title: Project structure
+  - id: routing
+    title: Routing
+  - id: handlers-context
+    title: Handlers and context
+  - id: validation
+    title: Validation
+  - id: responses
+    title: Typed responses
+  - id: middlewares
+    title: Middlewares
+  - id: scoped-handlers
+    title: Errors and 404
+  - id: openapi
+    title: OpenAPI on autopilot
+  - id: response-markers
+    title: response.of and headers
+  - id: compiler-cli
+    title: Compiler CLI
+  - id: compiler-config
+    title: Compiler config
+  - id: node-loader
+    title: Node loader
+  - id: auth
+    title: Auth and security
+  - id: error-handling
+    title: Error handling
+  - id: logging
+    title: Logging and DX
+  - id: deploy
+    title: Deploy and runtime
+quickLinks:
+  - title: Ship your first route
+    description: Go from install to a validated handler responding with types.
+    href: "#first-route"
+  - title: Export OpenAPI without friction
+    description: Configure metadata, response.of and produce 3.1 specs.
+    href: "#openapi"
+  - title: Automate with the compiler
+    description: Run the CLI, enable watch mode and plug into CI.
+    href: "#compiler-cli"
+---
+
+<span id="overview" class="docs-anchor"></span>
+## Overview
+
+TS API Kit speeds up building APIs in TypeScript by combining file-based routing, runtime validation, and OpenAPI 3.1 generation in a single workflow. It runs on top of the Hono runtime and keeps a native TypeScript developer experience on both Node and Deno.
+
+Core pillars:
+
+- **Declarative routing**: mirror the `src/routes` structure and get HTTP verbs for free.
+- **Typed validation**: bring Valibot or Zod, receive params, query, headers, and body already parsed through Standard Schema.
+- **Response helpers**: use `context.response.json()`, `response.ok()`, `response.stream()`, and friends to match your contract.
+- **Instant OpenAPI**: every handler attaches metadata; the kit serves `/openapi.json` and `/docs` with Scalar UI.
+- **Official tooling**: `@ts-api-kit/compiler` writes specs in CI, and the Node loader transpiles TS/TSX without a build step.
+
+Packages available in the monorepo:
+
+- `@ts-api-kit/core`: main runtime, file router, response helpers, server utilities, and Hono integration.
+- `@ts-api-kit/compiler`: CLI and programmatic API to materialise OpenAPI, validate routes, and scaffold configs.
+
+<span id="installation" class="docs-anchor"></span>
+## Installation
+
+Requirements:
+
+- Node 20+ or Deno 1.44+
+- TypeScript 5.6+
+
+Install the core and choose a validator (Valibot or Zod):
+
+```bash
+pnpm add @ts-api-kit/core valibot
+# or
+npm install @ts-api-kit/core valibot
+# or
+bun add @ts-api-kit/core valibot
+```
+
+Serve routes directly in Node with the official loader:
+
+```bash
+node --loader @ts-api-kit/core/node --experimental-transform-types --no-warnings src/index.ts
+```
+
+In Deno, import from JSR:
+
+```bash
+deno add jsr:@ts-api-kit/core
+```
+
+Install the compiler when you need static OpenAPI or auxiliary commands:
+
+```bash
+pnpm add -D @ts-api-kit/compiler
+```
+
+<span id="first-route" class="docs-anchor"></span>
+## First route
+
+Create a minimal handler in `src/routes/+route.ts`:
+
+```ts
+// src/routes/+route.ts
+import { handle } from "@ts-api-kit/core";
+import { response } from "@ts-api-kit/core/openapi";
+
+export const GET = handle(
+  {
+    openapi: {
+      summary: "Hello world",
+      responses: {
+        200: response.of<{ message: string }>({ description: "Default response" })
+      }
+    }
+  },
+  async ({ response }) => {
+    return response.json({ message: "Hello from TS API Kit" });
+  }
+);
+```
+
+Start a server with the `serve` helper:
+
+```ts
+// src/index.ts
+import { serve } from "@ts-api-kit/core";
+
+await serve({
+  port: 3000,
+  openapi: {
+    info: { title: "Demo", version: "1.0.0" }
+  }
+});
+```
+
+Run with the loader (or tsx, bun, deno). Available endpoints:
+
+- `GET /` for the handler above.
+- `/openapi.json` for the generated spec.
+- `/docs` for the embedded Scalar UI.
+
+<span id="project-structure" class="docs-anchor"></span>
+## Project structure
+
+The router walks `src/routes` and understands special files:
+
+```
+src/
+  routes/
+    +route.ts          # HTTP handlers exported per verb
+    +config.ts         # cascading config (+middleware, +error, +not-found)
+    +middleware.ts     # directory middlewares
+    +error.ts          # scoped error handler
+    +not-found.ts      # scoped 404 handler
+    users/
+      +route.ts
+      [id]/
+        +route.ts
+    (admin)/
+      reports/
+        +route.ts
+```
+
+- Folders with `[...]` map to dynamic params; `[[...slug]]` makes the tail optional.
+- Parentheses `(group)` organise code without changing the URL.
+- `+layout.ts` (optional) wraps child routes with shared middleware.
+
+<span id="routing" class="docs-anchor"></span>
+## Routing
+
+- Export any HTTP verb (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `HEAD`).
+- File names follow SvelteKit/Hono semantics: `users/[id]/+route.ts` becomes `/users/:id`.
+- `+route.ts` can export `ALL` for a catch-all handler.
+- Use `handle()` to pair spec plus implementation or the shorthand helpers `get()`, `post()`, etc.
+- The resolved path includes the base folders, ignoring grouping segments like `(admin)`.
+
+Example with dynamic segments and groups:
+
+```ts
+// src/routes/api/(v1)/users/[id]/+route.ts
+import { get } from "@ts-api-kit/core";
+import { response } from "@ts-api-kit/core/openapi";
+import * as v from "valibot";
+
+export const GET = get(
+  {
+    openapi: {
+      summary: "Fetch user",
+      tags: ["Users"],
+      request: {
+        params: v.object({ id: v.string() })
+      },
+      responses: {
+        200: response.of<{ id: string; name: string }>({ description: "Found" }),
+        404: response.of<{ error: string }>({ description: "Not found" })
+      }
+    }
+  },
+  async ({ params, response }) => {
+    const user = await loadUser(params.id);
+    if (!user) return response.notFound();
+    return response.ok(user);
+  }
+);
+```
+
+<span id="handlers-context" class="docs-anchor"></span>
+## Handlers and context
+
+`handle()` wraps the Hono handler and injects typed context. You receive `{ params, query, headers, body, response }` already inferred from the declared schemas.
+
+```ts
+import { handle } from "@ts-api-kit/core";
+import { response } from "@ts-api-kit/core/openapi";
+import * as v from "valibot";
+
+type Todo = { id: string; title: string; completed: boolean };
+
+export const POST = handle(
+  {
+    openapi: {
+      request: {
+        body: v.object({ title: v.string(), completed: v.boolean() })
+      },
+      responses: {
+        201: response.of<Todo>({ description: "Todo created" })
+      }
+    }
+  },
+  async ({ body, request, response }) => {
+    const todo = await createTodo(body);
+    request.headers.get("x-request-id");
+    return response.created(todo);
+  }
+);
+```
+
+Besides `handle` you can reach for `get`, `post`, `put`, `patch`, `delete`, `options`, and `head` helpers when preferred.
+
+<span id="validation" class="docs-anchor"></span>
+## Validation
+
+TS API Kit detects any validator implementing Standard Schema. It currently supports Valibot and Zod out of the box:
+
+- Declare schemas under `openapi.request` (params, query, headers, body).
+- Inputs are parsed before hitting the handler; validation errors automatically return 400.
+- Output types align with the schema (Valibot `InferOutput`, Zod `z.output`).
+- Without a schema, types fall back to `Record<string, unknown>`.
+
+Mix validators when you need to:
+
+```ts
+import * as v from "valibot";
+import * as z from "zod";
+
+export const GET = handle(
+  {
+    openapi: {
+      request: {
+        params: v.object({ id: v.string() }),
+        query: z
+          .object({ include: z.array(z.enum(["profile", "posts"])) })
+          .partial()
+      }
+    }
+  },
+  async ({ params, query }) => {
+    // params.id -> string
+    // query.include -> string[] | undefined
+  }
+);
+```
+
+<span id="responses" class="docs-anchor"></span>
+## Typed responses
+
+The `context.response` helper offers shortcuts aligned with the status codes declared in `openapi.responses`:
+
+- `response.json(data, { status })`
+- `response.text("plain")`
+- `response.html("<h1>Hi</h1>")`
+- `response.jsx(jsxString)` (works with `@kitajs/html` via the loader)
+- `response.redirect(url, 302)`
+- `response.file(buffer, "report.csv")`
+- `response.stream(readable)`
+- `response.error("Invalid payload", 400)`
+- Status helpers: `response.ok`, `response.created`, `response.noContent`, `response.badRequest`, `response.unauthorized`, `response.forbidden`, `response.notFound`, `response.conflict`, `response.unprocessableEntity`, `response.tooManyRequests`, `response.internalError`.
+
+If you call a status that is not declared, TypeScript flags it immediately.
+
+<span id="middlewares" class="docs-anchor"></span>
+## Middlewares
+
+Create `+middleware.ts` in any directory to run functions before child handlers:
+
+```ts
+// src/routes/admin/+middleware.ts
+import { defineMiddleware } from "@ts-api-kit/core";
+
+export const middleware = defineMiddleware(async (c, next) => {
+  if (!c.req.header("authorization")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  await next();
+});
+```
+
+Other utilities:
+
+- `use(mw1, mw2)` as a readable alias for `defineMiddleware`.
+- `composeMiddleware(a, b, c)` merges middleware arrays.
+- `createLoggerMiddleware()` logs `METHOD PATH -> STATUS (ms)` for scoped routes.
+
+Middlewares cascade to child directories and can be extended or overridden.
+
+<span id="scoped-handlers" class="docs-anchor"></span>
+## Errors and 404
+
+Define scoped handlers per directory:
+
+```ts
+// src/routes/+error.ts
+import { handleError } from "@ts-api-kit/core";
+
+export const onError = handleError((err, c) => {
+  console.error("Unhandled", err);
+  return c.json({ error: "Internal error" }, 500);
+});
+```
+
+```ts
+// src/routes/blog/+not-found.ts
+import { handleNotFound } from "@ts-api-kit/core";
+
+export const notFound = handleNotFound((c) => c.json({ error: "Not found" }, 404));
+```
+
+Handlers are resolved from the deepest match to the root, so `src/routes/admin/+error.ts` applies only to routes beneath `admin/`.
+
+<span id="openapi" class="docs-anchor"></span>
+## OpenAPI on autopilot
+
+Each handler can define `openapi` with summary, description, tags, security, and schemas:
+
+```ts
+import { handle } from "@ts-api-kit/core";
+import { response } from "@ts-api-kit/core/openapi";
+import * as v from "valibot";
+
+export const POST = handle(
+  {
+    openapi: {
+      summary: "Create user",
+      tags: ["Users"],
+      request: {
+        body: v.object({ name: v.string(), email: v.pipe(v.string(), v.email()) })
+      },
+      responses: {
+        201: response.of<User>({ description: "Created" }),
+        409: response.of<{ error: string }>({ description: "Email already used" })
+      }
+    }
+  },
+  async ({ body, response }) => {
+    const user = await createUser(body);
+    if (!user) return response.conflict("Email in use");
+    return response.created(user);
+  }
+);
+```
+
+At bootstrap tweak global metadata:
+
+```ts
+await serve({
+  port: 3000,
+  openapi: {
+    info: {
+      title: "Store API",
+      description: "Internal APIs",
+      version: "1.2.0"
+    },
+    servers: [{ url: "https://api.acme.dev", description: "Dev" }]
+  },
+  openapiOutput: {
+    mode: "file",
+    path: "./openapi.json",
+    project: "./tsconfig.json"
+  }
+});
+```
+
+Use placeholders like `{{pkg.name}}`, `{{pkg.version}}`, and `{{server.origin}}`; they are resolved automatically.
+
+<span id="response-markers" class="docs-anchor"></span>
+## response.of and headers
+
+`response.of<T>()` adds schema metadata without binding runtime types. Combine it with `headers.of` to document response headers:
+
+```ts
+import { response, headers } from "@ts-api-kit/core/openapi";
+
+responses: {
+  200: response.of<User>({
+    description: "User returned",
+    headers: headers.of<{ "x-request-id": string }>()
+  }),
+  204: response.of<void>({ description: "No content" })
+}
+```
+
+If you skip explicit responses the kit falls back to a generic 200, but declaring them drastically improves DX and the final spec.
+
+<span id="compiler-cli" class="docs-anchor"></span>
+## Compiler CLI
+
+`@ts-api-kit/compiler` exposes commands such as:
+
+- `ts-api-compiler generate --project ./tsconfig.json --output ./openapi.json` to build the spec once.
+- `--watch` watches `src/**/*.ts` and regenerates on save.
+- `ts-api-compiler init` scaffolds `ts-api-compiler.config.json` with sensible defaults.
+- `ts-api-compiler validate` ensures every route exports valid handlers.
+- `ts-api-compiler list` prints method and resolved path (great for audits).
+
+Add scripts to your API project:
+
+```json
+{
+  "scripts": {
+    "openapi": "ts-api-compiler generate",
+    "openapi:watch": "ts-api-compiler generate --watch"
+  }
+}
+```
+
+<span id="compiler-config" class="docs-anchor"></span>
+## Compiler config
+
+The optional `ts-api-compiler.config.json` accepts:
+
+```json
+{
+  "output": "./openapi.json",
+  "title": "Catalog API",
+  "version": "1.0.0",
+  "description": "Generated from TS API Kit routes",
+  "servers": [
+    { "url": "https://api.dev", "description": "Dev" }
+  ],
+  "watch": false,
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules/**", "dist/**"]
+}
+```
+
+Run `ts-api-compiler init --output docs/openapi.json` to emit the initial file with those fields.
+
+<span id="node-loader" class="docs-anchor"></span>
+## Node loader
+
+The `@ts-api-kit/core/node` loader executes `.ts`, `.tsx`, and `.jsx` without manual transpilation. Highlights:
+
+- Uses `typescript.transpileModule` with `jsxImportSource` defaulting to `@kitajs/html`.
+- Emits inline source maps for readable stack traces.
+- Respects `--experimental-transform-types` to strip types at runtime.
+
+Usage: `node --loader @ts-api-kit/core/node --experimental-transform-types src/index.ts`.
+
+<span id="auth" class="docs-anchor"></span>
+## Auth and security
+
+Use `+config.ts` to configure directory-wide limits:
+
+```ts
+// src/routes/+config.ts
+import type { DirConfig } from "@ts-api-kit/core";
+
+export default {
+  body: { limit: 1_048_576 }, // 1 MB
+  timeout: { ms: 5_000, message: "Timeout" },
+  cors: {
+    origin: ["https://app.dev"],
+    methods: ["GET", "POST", "PUT"],
+    headers: ["Content-Type", "Authorization"]
+  },
+  auth: { required: true },
+  rateLimit: { windowMs: 60_000, max: 120, policy: "120;w=60" }
+} satisfies DirConfig;
+```
+
+- `body.limit` rejects requests above the limit using `Content-Length`.
+- `timeout` returns a soft 504 without aborting the server-side work.
+- `cors` attaches headers and handles preflight automatically.
+- `auth.required` checks for the `Authorization` header.
+- `rateLimit` only injects informative headers (`x-ratelimit-*`).
+
+<span id="error-handling" class="docs-anchor"></span>
+## Error handling
+
+- Use `handleError` and `handleNotFound` per scope.
+- Handlers can throw; the router forwards the error to the closest handler.
+- `config.timeout` sends a standard JSON response when execution exceeds the limit.
+- Prefer `response.error(message, status)` to keep contracts aligned with OpenAPI.
+
+<span id="logging" class="docs-anchor"></span>
+## Logging and DX
+
+The internal logger follows debug-style namespaces (`core:server`, `openapi:registry`, etc.). Control it via environment variables:
+
+- `TS_API_KIT_LOG_LEVEL=debug` sets the global level (`silent`, `error`, `warn`, `info`, `debug`).
+- `DEBUG=ts-api-kit*` enables verbose output per namespace.
+- `mountFileRouter(app, { logLevel: 'warn' })` overrides the level during bootstrap.
+- `createLoggerMiddleware()` prints `METHOD PATH -> STATUS (ms)` for selected routes.
+
+<span id="deploy" class="docs-anchor"></span>
+## Deploy and runtime
+
+Suggested workflows:
+
+- **Standalone server** with `serve()` (great for prototypes and internal CLIs).
+- **Existing Hono app**:
+
+```ts
+import { Hono } from "hono";
+import { mountFileRouter } from "@ts-api-kit/core";
+
+const app = new Hono();
+await mountFileRouter(app, { routesDir: "./src/routes" });
+export default app;
+```
+
+- **CI/CD**: run `ts-api-compiler generate` after tests and publish the resulting `openapi.json` as an artifact.
+- **Deno Deploy**: import `serve` from JSR and compose it with `Deno.serve` using `mountFileRouter`.
+
+Keeping `openapiOutput.mode` as `memory` guarantees that `/openapi.json` stays fresh even without writing a file.
+
+> Tip: when docs change, run your test suite (`pnpm test` or equivalent) before shipping.

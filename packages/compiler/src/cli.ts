@@ -19,6 +19,7 @@ import process from "node:process";
 import { Command } from "commander";
 import { generateOpenAPI } from "./openapi-generator.ts";
 import type { OpenAPIPluginOptions } from "./plugin.ts";
+import { generateRouteMapper } from "./route-mapper.ts";
 
 const program = new Command();
 
@@ -130,6 +131,37 @@ program
 		try {
 			console.log("📋 Listando rotas...");
 			await listRoutes(options.project);
+		} catch (error) {
+			console.error("❌ Erro:", error instanceof Error ? error.message : error);
+			process.exit(1);
+		}
+	});
+
+// Comando para gerar mapeamento de rotas (para Cloudflare Workers)
+program
+	.command("generate-routes")
+	.description(
+		"Gera arquivo de mapeamento estático de rotas para Cloudflare Workers",
+	)
+	.option(
+		"-r, --routes <path>",
+		"Caminho para o diretório de rotas",
+		"./src/routes",
+	)
+	.option(
+		"-o, --output <path>",
+		"Arquivo de saída",
+		"./src/routes.generated.ts",
+	)
+	.option("-b, --base-path <path>", "Base path para as rotas", "")
+	.action(async (options) => {
+		try {
+			console.log("🚀 Gerando mapeamento de rotas...");
+			await generateRouteMapper({
+				routesDir: options.routes,
+				outputPath: options.output,
+				basePath: options.basePath,
+			});
 		} catch (error) {
 			console.error("❌ Erro:", error instanceof Error ? error.message : error);
 			process.exit(1);
