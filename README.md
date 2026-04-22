@@ -14,7 +14,6 @@ A modern TypeScript framework for APIs built on Hono with file‑based routing, 
 - ⚡ Hono runtime performance
 - 🧩 Composable middlewares
 - 🧾 Automatic OpenAPI generation + docs UI
-- 🔌 SvelteKit integration (Remote Functions)
 
 ## Packages
 
@@ -22,7 +21,6 @@ This monorepo contains the following packages:
 
 - [@ts-api-kit/core](./packages/core) — framework runtime + helpers
 - [@ts-api-kit/compiler](./packages/compiler) — OpenAPI generation tools
-- [openapi-to-remote](./packages/openapi-to-remote) — SvelteKit Remote Functions generator
 
 ## Installation
 
@@ -42,14 +40,6 @@ yarn add @ts-api-kit/core valibot
 npm install -D @ts-api-kit/compiler
 # or
 pnpm add -D @ts-api-kit/compiler
-```
-
-### SvelteKit generator
-
-```bash
-npm install -D openapi-to-remote
-# or
-pnpm add -D openapi-to-remote
 ```
 
 ## Quick Start
@@ -125,12 +115,11 @@ pnpm test
 ```text
 ts-api-kit/
 ├── packages/
-│   ├── core/                   # Main framework
-│   └── compiler/               # OpenAPI compiler
-├── packages/openapi-to-remote/ # SvelteKit generator
-├── examples/                   # Example projects
-├── docs/                       # Documentation site (SveltePress)
-└── .github/                    # CI/CD
+│   ├── core/       # Main framework
+│   └── compiler/   # OpenAPI compiler
+├── examples/       # Example projects
+├── docs/           # Documentation site (SveltePress)
+└── .github/        # CI/CD
 ```
 
 ## Contributing
@@ -145,7 +134,6 @@ MIT — see [LICENSE](./LICENSE).
 
 - [Hono](https://hono.dev/) — modern web framework
 - [Valibot](https://valibot.dev/) — validation library
-- [SvelteKit](https://kit.svelte.dev/) — web framework
 - [TypeScript](https://www.typescriptlang.org/) — language
 
 ## Support

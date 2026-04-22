@@ -477,5 +477,4 @@ Certifique-se de que:
 ## Próximos Passos
 
 - [Aprenda sobre geração de OpenAPI](/guides/openapi-generation)
-- [Integre com SvelteKit](/packages/openapi-to-remote)
 - [Configure documentação automática](/guides/documentation)
