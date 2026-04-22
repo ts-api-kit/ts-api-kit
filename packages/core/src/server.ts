@@ -50,6 +50,18 @@ import {
 	setCurrentFilePath,
 	setRequestContext,
 } from "./server/context.ts";
+import type {
+	EffectiveSchemas,
+	InferResponse,
+	InferResponses,
+	InferResponseType,
+	ResponseForStatus,
+	RouteSpec,
+	SchemaDefinition,
+	ValidResponse,
+	ValidStatusCodes,
+	WithOpenAPI,
+} from "./server/route-spec.ts";
 import {
 	formatIssues,
 	type InferInput,
@@ -76,6 +88,18 @@ export type { LayoutComponent };
 // Re-export schema interop so consumers keep their existing imports.
 export { formatIssues, toStandardSchema };
 export type { InferInput, InferOutput, Issue };
+// Re-export route spec types so consumers keep their existing imports.
+export type {
+	InferResponse,
+	InferResponses,
+	InferResponseType,
+	ResponseForStatus,
+	RouteSpec,
+	SchemaDefinition,
+	ValidResponse,
+	ValidStatusCodes,
+	WithOpenAPI,
+};
 /**
  * ──────────────────────────────────────────────────────────────────────────────
  * Error + tiny helpers
@@ -582,64 +606,12 @@ export const jsxStreamHono = (
 // issue formatting) now lives in `./server/schema.ts`. The helpers are
 // imported at the top of this file and re-exported for consumers.
 
-/**
- * ──────────────────────────────────────────────────────────────────────────────
- * Route schema + handler inference (Standard-only)
- * ──────────────────────────────────────────────────────────────────────────────
- */
-
-/**
- * Defines the schema structure for request validation.
- * Each property represents a different part of the HTTP request.
- */
-export type SchemaDefinition = {
-	query?: StandardSchemaV1<unknown, unknown>;
-	params?: StandardSchemaV1<unknown, unknown>;
-	headers?: StandardSchemaV1<unknown, unknown>;
-	body?: StandardSchemaV1<unknown, unknown>;
-};
-
-// Tipos de OpenAPI (reusados no registry)
-/**
- * Extends SchemaDefinition with OpenAPI metadata for documentation generation.
- */
-export type WithOpenAPI = {
-	openapi?: {
-		method?: HttpMethod; // Now optional - will be inferred from export name
-		summary?: string;
-		tags?: string[];
-		request?: RequestSchemas;
-		responses?: ResponsesMap;
-	};
-} & SchemaDefinition;
-
-/**
- * Union type for route specifications, supporting both basic and OpenAPI-enhanced schemas.
- */
-export type RouteSpec = SchemaDefinition | WithOpenAPI;
-
-type EffectiveSchemas<T extends RouteSpec> = {
-	query: T extends { openapi: { request: { query: infer Q } } }
-		? Q
-		: T extends { query: infer Q }
-			? Q
-			: never;
-	params: T extends { openapi: { request: { params: infer P } } }
-		? P
-		: T extends { params: infer P }
-			? P
-			: never;
-	headers: T extends { openapi: { request: { headers: infer H } } }
-		? H
-		: T extends { headers: infer H }
-			? H
-			: never;
-	body: T extends { openapi: { request: { body: infer B } } }
-		? B
-		: T extends { body: infer B }
-			? B
-			: never;
-};
+// Most route specification types (`SchemaDefinition`, `WithOpenAPI`,
+// `RouteSpec`, `ValidStatusCodes`, etc.) now live in
+// `./server/route-spec.ts`. They're imported at the top of this file
+// and re-exported above for backward compatibility. `HandlerContext`
+// stays here because it references `ResponseTools`, which is defined
+// alongside the response helpers in this file.
 
 /**
  * Strongly-typed context passed to route handlers after validation.
@@ -673,69 +645,6 @@ export type HandlerContext<T extends RouteSpec> = {
 			: unknown;
 	response: ResponseTools<T>;
 };
-
-/**
- * Extracts the concrete type from a response marker.
- */
-export type InferResponseType<T> = T extends { __phantom__: infer U }
-	? U
-	: never;
-/**
- * Maps the response markers declared in the route spec to plain types.
- */
-export type InferResponses<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
-}
-	? {
-			[K in keyof R]: R[K] extends { __phantom__: infer U } ? U : never;
-		}
-	: never;
-/**
- * Union of all declared response payloads for the route.
- */
-export type ValidResponse<T extends RouteSpec> =
-	| InferResponses<T>[keyof InferResponses<T>]
-	| Response;
-/**
- * Extracts the response payload type for a specific status code.
- */
-export type ResponseForStatus<
-	T extends RouteSpec,
-	S extends number,
-> = T extends { openapi: { responses: infer R } }
-	? S extends keyof R
-		? R[S] extends { __phantom__: infer U }
-			? U
-			: never
-		: never
-	: never;
-/**
- * Extracts the declared status codes for the route.
- */
-export type ValidStatusCodes<T extends RouteSpec> = T extends {
-	openapi: { responses: infer R };
-}
-	? keyof R extends number
-		? keyof R
-		: never
-	: never;
-/**
- * Extracts the response type for a given status or falls back to default.
- */
-export type InferResponse<
-	T extends RouteSpec,
-	S extends number = 200,
-> = T extends { openapi: { responses: infer R } }
-	? R extends ResponsesMap
-		? S extends keyof R
-			? R[S] extends ResponseMarker<infer U>
-				? U
-				: unknown
-			: R extends { default: ResponseMarker<infer DU> }
-				? DU
-				: unknown
-		: unknown
-	: unknown;
 
 function pickContentType(req: {
 	header: (name: string) => string | undefined;
