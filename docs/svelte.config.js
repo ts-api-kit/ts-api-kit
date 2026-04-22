@@ -8,7 +8,12 @@ const config = {
 	// for more information about preprocessors
 	preprocess: [vitePreprocess(), mdsvex()],
 	kit: {
-		adapter: adapter(),
+		// Docs site is static content; don't block the build on routes
+		// that haven't been annotated as prerenderable yet. The shadcn
+		// port is still in flight and some routes still rely on runtime
+		// data — this is the same escape hatch documented in
+		// https://github.com/sveltejs/kit/tree/main/packages/adapter-static#strict
+		adapter: adapter({ strict: false }),
 		alias: {
 			'@': './src/lib',
 			'@/*': './src/lib/*'
