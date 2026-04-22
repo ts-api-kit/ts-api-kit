@@ -683,6 +683,5 @@ jobs:
 
 ## Próximos Passos
 
-- [Integre com SvelteKit](/packages/openapi-to-remote)
 - [Configure documentação automática](/guides/documentation)
 - [Explore exemplos práticos](/examples)

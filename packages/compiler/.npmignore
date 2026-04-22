@@ -1,44 +1,35 @@
-# Source files (keep only dist)
-src/
-*.ts
-!*.d.ts
+# Source-only publish; keep TypeScript sources.
+# Exclude tests, fixtures, and dev config that the `files` array in package.json
+# already leaves out, so `.npmignore` stays aligned if `files` is ever removed.
 
-# Development files
-tsconfig.json
-tsconfig.tsbuildinfo
-
-# Test files
+# Tests and fixtures
 *.test.ts
 *.spec.ts
 test/
 tests/
 __tests__/
+__fixtures__/
 
-# Documentation
+# Dev / build config
+tsconfig.json
+tsconfig.tsbuildinfo
+jsr.json
+deno.json
+deno.lock
+biome.json
+.biome.json
+
+# Docs and examples
 docs/
-*.md
-!README.md
-
-# Examples
 examples/
 
-# Config files
-.biome.json
-biome.json
-.eslintrc*
-.prettierrc*
-
-# Git
+# Git / IDE / OS
 .git/
 .gitignore
-
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
@@ -46,12 +37,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Dependencies
+# Dependencies and build artifacts
 node_modules/
-
-# Build artifacts
 dist/
-!dist/index.js
-!dist/index.d.ts
-!dist/**/*.js
-!dist/**/*.d.ts

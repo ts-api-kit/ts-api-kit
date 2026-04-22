@@ -46,7 +46,7 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 		if (seg.startsWith("(") && seg.endsWith(")")) continue;
 
 		// catch-all: [...slug]
-		const mCatch = seg.match(/^\[\.+\.\.\.(.+)\]$/);
+		const mCatch = seg.match(/^\[\.\.\.(.+)\]$/);
 		if (mCatch) {
 			const name = mCatch[1];
 			honoSegs.push(`:${name}{.*}`);
@@ -55,7 +55,7 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 		}
 
 		// optional catch-all: [[...slug]]
-		const mOptCatch = seg.match(/^\[\[\.+\.\.\.(.+)\]\]$/);
+		const mOptCatch = seg.match(/^\[\[\.\.\.(.+)\]\]$/);
 		if (mOptCatch) {
 			const name = mOptCatch[1];
 			honoSegs.push(`:${name}{.*}`);
@@ -63,11 +63,16 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 			continue;
 		}
 
-		// optional dynamic: [[locale]] or [[id]]
-		const mOptDyn = seg.match(/^\[\[(.+)\]\]$/);
-		if (mOptDyn) {
-			const name = mOptDyn[1];
-			honoSegs.push(`:${name}`);
+		// Check the more specific patterns first so that the broader
+		// `[[name]]` / `[name]` matchers don't swallow cases with a regex
+		// constraint (e.g. `[[id([0-9]+)]]`).
+
+		// optional dynamic with regex: [[id([0-9]+)]]
+		const mOptDynRegex = seg.match(/^\[\[(.+)\((.+)\)\]\]$/);
+		if (mOptDynRegex) {
+			const name = mOptDynRegex[1];
+			const regex = mOptDynRegex[2];
+			honoSegs.push(`:${name}(${regex})`);
 			oaSegs.push(`{${name}}`);
 			continue;
 		}
@@ -82,12 +87,11 @@ export function derivePathsFromFile(absOrRelFile: string): DerivedPaths {
 			continue;
 		}
 
-		// optional dynamic with regex: [[id([0-9]+)]]
-		const mOptDynRegex = seg.match(/^\[\[(.+)\((.+)\)\]\]$/);
-		if (mOptDynRegex) {
-			const name = mOptDynRegex[1];
-			const regex = mOptDynRegex[2];
-			honoSegs.push(`:${name}(${regex})`);
+		// optional dynamic: [[locale]] or [[id]]
+		const mOptDyn = seg.match(/^\[\[(.+)\]\]$/);
+		if (mOptDyn) {
+			const name = mOptDyn[1];
+			honoSegs.push(`:${name}`);
 			oaSegs.push(`{${name}}`);
 			continue;
 		}

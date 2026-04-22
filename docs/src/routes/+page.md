@@ -22,8 +22,6 @@ features:
     description: Suporte completo ao TypeScript com inferência de tipos automática
   - title: Hono Powered
     description: Baseado no Hono para performance e simplicidade máxima
-  - title: SvelteKit Integration
-    description: Geração automática de Remote Functions para integração com SvelteKit
 ---
 
 <!--
@@ -49,10 +47,6 @@ O pacote principal que fornece o servidor, roteamento por arquivos e validação
 ### ts-api-compiler
 
 Plugin TypeScript para gerar automaticamente arquivos OpenAPI.json a partir de rotas TypeScript.
-
-### openapi-to-remote
-
-Ferramenta para gerar Remote Functions do SvelteKit a partir de especificações OpenAPI.
 
 ## 🎯 Exemplo Rápido
 
