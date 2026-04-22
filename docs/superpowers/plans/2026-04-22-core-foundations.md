@@ -17,6 +17,7 @@
 **Motivation:** Low-risk fixes that currently mislead users or hide real build behavior.
 
 ### Files
+
 - Modify: `README.md` — remove `openapi-to-remote` references (lines 25, 50, 52, 130)
 - Modify: `vite.config.ts` — remove `openapi-to-remote` sidebar entry (lines 64-65)
 - Modify: `packages/core/tsconfig.json` — resolve `noEmit: true` vs `build: tsc` contradiction
@@ -31,7 +32,7 @@
 4. Decide build contract. Two acceptable shapes:
    - **A — ship source (preferred for dev ergonomics):** `main`/`types` → `./src/index.ts`, drop `dist` from `files`, keep `noEmit: true`, change `build` script to `tsgo --skipLibCheck` (type-check only, matches existing `check` script).
    - **B — ship compiled:** flip `noEmit: false` and keep current `main`/`types`.
-   Pick A because `exports` already points at `./src/*.ts` and that's what's actually consumed. Remove the dead build path.
+     Pick A because `exports` already points at `./src/*.ts` and that's what's actually consumed. Remove the dead build path.
 5. Inspect `server.ts:625` context. If the commented block is superseded, delete it; if intended, re-enable behind a clear export.
 6. Run `pnpm -r test` and `pnpm -r lint`.
 7. Commit: `chore(core): drop dangling openapi-to-remote refs and align build contract`.
@@ -45,6 +46,7 @@
 **Motivation:** 642-line routing core is completely untested. This is the highest-leverage coverage gain.
 
 ### Files
+
 - Create: `packages/core/src/file-router.test.ts`
 - Create: `packages/core/src/__fixtures__/routes/` (fixture route tree)
 - Test runner: `node --test --experimental-transform-types --loader @ts-api-kit/core/node`
@@ -81,6 +83,7 @@ Read `file-router.ts` first to enumerate behaviors, then test:
 **Motivation:** 777 lines generating OpenAPI with 6 `as any` casts against `_def` internals of both Zod and Valibot. This is a time bomb — any schema-lib update silently breaks docs generation.
 
 ### Files
+
 - Modify: `packages/core/src/openapi/builder.ts` — remove 6 `as any` (lines 269, 271, 296, 301, 755, 758)
 - Create: `packages/core/src/openapi/schema-introspection.ts` — typed helpers per schema library
 - Create: `packages/core/src/openapi/builder.test.ts`
@@ -91,10 +94,10 @@ Introduce per-library introspection helpers that accept the unknown schema and r
 
 ```ts
 type IntrospectedSchema =
-  | { kind: 'object'; shape: Record<string, unknown> }
-  | { kind: 'literal-union'; values: readonly unknown[] }
-  | { kind: 'literal'; value: unknown }
-  | { kind: 'other'; typeName: string | undefined };
+	| { kind: 'object'; shape: Record<string, unknown> }
+	| { kind: 'literal-union'; values: readonly unknown[] }
+	| { kind: 'literal'; value: unknown }
+	| { kind: 'other'; typeName: string | undefined };
 
 export function introspect(schema: unknown): IntrospectedSchema;
 ```
@@ -120,6 +123,7 @@ Detect Zod vs Valibot via stable surface markers (`"~standard"` from Standard Sc
 **Motivation:** Current generic errors ("Failed to generate OpenAPI document") give no clue which route or stage failed.
 
 ### Files
+
 - Modify: `packages/core/src/openapi/builder.ts` — wrap per-route processing with context
 - Modify: `packages/core/src/openapi/generator/index.ts` — surface structured errors
 
@@ -140,6 +144,7 @@ Detect Zod vs Valibot via stable surface markers (`"~standard"` from Standard Sc
 **Motivation:** 1918 lines in one file mixing request handling, response building, OpenAPI registration, and error handling. Hard to test, hard to read, hard to evolve.
 
 ### Target structure
+
 - `packages/core/src/server.ts` — **public entry** only: `createApiServer()`, re-exports. Under ~300 lines.
 - `packages/core/src/server/request-handler.ts` — request binding: params/query/body parsing via Standard Schema.
 - `packages/core/src/server/response-builder.ts` — response helpers (`json`, `text`, `html`, `stream`, `file`, etc.).
@@ -169,6 +174,7 @@ Detect Zod vs Valibot via stable surface markers (`"~standard"` from Standard Sc
 **Motivation:** Two examples (`simple-example`, `with-cloudflare-workers`) can rot silently. A boot-level smoke test catches the worst regressions.
 
 ### Files
+
 - Create: `examples/simple-example/src/server.test.ts` (if node runtime)
 - Skip `with-cloudflare-workers` for now — wrangler smoke test is a bigger lift; add a TODO in its README.
 

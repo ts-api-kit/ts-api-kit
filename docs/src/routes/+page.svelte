@@ -233,7 +233,8 @@
 								>
 									TypeScript-first framework
 								</Badge>
-								<span>File-based routing, schema validation, and OpenAPI with zero boilerplate.</span
+								<span
+									>File-based routing, schema validation, and OpenAPI with zero boilerplate.</span
 								>
 							</div>
 							<h1
@@ -242,8 +243,9 @@
 								Ship TypeScript APIs faster.
 							</h1>
 							<p class="max-w-2xl text-lg text-muted-foreground">
-					Combine the file router, response helpers, and OpenAPI generation without giving up TypeScript control.
-				</p>
+								Combine the file router, response helpers, and OpenAPI generation without giving up
+								TypeScript control.
+							</p>
 							<div class="flex flex-wrap gap-3">
 								<a href="#installation" class={cn(buttonVariants({ size: 'lg' }), 'gap-2')}>
 									<SparklesIcon class="size-4" />
@@ -387,4 +389,3 @@
 		</div>
 	</SidebarInset>
 </SidebarProvider>
-
