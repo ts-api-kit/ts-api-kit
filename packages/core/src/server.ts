@@ -1547,4 +1547,19 @@ export default class Server {
 		);
 		serve({ fetch: this.app.fetch, port: finalPort });
 	}
+
+	/**
+	 * Dispatches a `Request` through the internal Hono app without binding
+	 * to a port. Useful for smoke tests and in-process integration tests.
+	 *
+	 * @example
+	 * ```ts
+	 * const s = new Server();
+	 * await s.configureRoutes("./src/routes");
+	 * const res = await s.fetch(new Request("http://example/"));
+	 * ```
+	 */
+	fetch = (req: Request): Promise<Response> => {
+		return this.app.fetch(req);
+	};
 }
