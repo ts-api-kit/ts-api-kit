@@ -622,12 +622,6 @@ export const jsxStream = (
 	});
 };
 
-// export const jsxStream = (
-//   html: (rid: number | string) => string | Promise<string>
-// ) => {
-//   return renderToStream(html);
-// };
-
 /**
  * Streams JSX using an explicit Hono context, useful when the helper is used
  * outside of the implicit request lifecycle handled by `jsxStream`.
