@@ -3,10 +3,9 @@
   "version": "0.3.0",
   "description": "Um framework TypeScript moderno para APIs baseado no Hono com roteamento por arquivos e validação de schemas usando Valibot",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "files": [
-    "dist",
     "src",
     "README.md",
     "LICENSE"
@@ -36,7 +35,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --noEmit",
     "test": "node --test --experimental-transform-types --loader @ts-api-kit/core/node --no-warnings",
     "lint": "cd ../../ && biome check packages/core",
     "lint:fix": "cd ../../ && biome check packages/core --write",
