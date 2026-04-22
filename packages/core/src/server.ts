@@ -40,7 +40,32 @@ import {
 	type RequestSchemas,
 	type ResponsesMap,
 } from "./openapi/registry.ts";
+import {
+	clearRequestContext,
+	getActiveLayouts,
+	getCurrentFilePath,
+	getRequestContext,
+	getRequestEvent,
+	type LayoutComponent,
+	setActiveLayouts,
+	setCurrentFilePath,
+	setRequestContext,
+} from "./server/context.ts";
 import { createLogger } from "./utils/logger.ts";
+
+// Re-export the context surface so long-time consumers that imported
+// these symbols from `@ts-api-kit/core/server` keep working unchanged.
+export {
+	clearRequestContext,
+	getActiveLayouts,
+	getCurrentFilePath,
+	getRequestContext,
+	getRequestEvent,
+	setActiveLayouts,
+	setCurrentFilePath,
+	setRequestContext,
+};
+export type { LayoutComponent };
 /**
  * ──────────────────────────────────────────────────────────────────────────────
  * Error + tiny helpers
@@ -86,110 +111,8 @@ export const error = (
 	throw new AppError(code, message, meta);
 };
 
-let currentContext: Context | null = null;
-let currentFilePath: string | null = null;
-// Track active layout chain per request context
-export type LayoutComponent = (props: {
-	children: unknown;
-}) => unknown | Promise<unknown>;
-const layoutsByContext = new WeakMap<Context, LayoutComponent[]>();
-
-/**
- * Sets the current request context for the application.
- * This is used internally to track the current Hono context.
- *
- * @param c - The Hono context to set as current
- */
-export const setRequestContext = (c: Context): void => {
-	currentContext = c;
-};
-
-/**
- * Sets the current file path being processed.
- * This is used for tracking which route file is currently being executed.
- *
- * @param filePath - The file path to set as current
- */
-export const setCurrentFilePath = (filePath: string): void => {
-	currentFilePath = filePath;
-};
-
-/**
- * Associates an ordered list of layout components with the given request context.
- * The list should be ordered from root-most to leaf-most.
- */
-export const setActiveLayouts = (
-	c: Context,
-	layouts: LayoutComponent[],
-): void => {
-	layoutsByContext.set(c, layouts);
-};
-
-/**
- * Gets active layouts for the current request context (root → leaf order).
- */
-const getActiveLayouts = (): LayoutComponent[] => {
-	if (!currentContext) return [];
-	return layoutsByContext.get(currentContext) ?? [];
-};
-
-/**
- * Gets the current file path being processed.
- *
- * @returns The current file path or null if not set
- */
-export const getCurrentFilePath = (): string | null => {
-	return currentFilePath;
-};
-
-/**
- * Gets the current request event with cookies, headers, and other request data.
- *
- * @returns The current request event object
- */
-export const getRequestEvent = (): {
-	rid: MiddlewareHandler;
-	cookies: {
-		get: (name: string) => string | undefined;
-		set: (name: string, value: string) => void;
-	};
-	locals: { title: string };
-	headers?: Record<string, string>;
-	url?: string;
-	method?: string;
-} => {
-	const rid = requestId();
-	if (!currentContext) {
-		return {
-			rid,
-			cookies: {
-				get: (_name: string) => undefined,
-				set: (_name: string, _value: string) => {},
-			},
-			locals: { title: "Default Title" },
-		} as const;
-	}
-
-	return {
-		rid,
-		cookies: {
-			get: (name: string) =>
-				currentContext?.req
-					.header("cookie")
-					?.split(";")
-					.find((c) => c.trim().startsWith(`${name}=`))
-					?.split("=")[1],
-			set: (name: string, value: string) =>
-				currentContext?.header("Set-Cookie", `${name}=${value}`),
-		},
-		locals: { title: "Default Title" },
-		headers: Object.fromEntries(Object.entries(currentContext?.req.header())),
-		url: currentContext?.req.url,
-		method: currentContext?.req.method,
-	} as const;
-};
-
-Response;
+// Request context, layout chain, and request-event helpers now live in
+// `./server/context.ts` (re-exported above for backwards compatibility).
 /**
  * Creates a JSON response with the provided data.
  *
@@ -607,14 +530,15 @@ export const createResponseTools = <
 export const jsxStream = (
 	html: (rid: number | string) => string | Promise<string>,
 ): Response => {
-	if (!currentContext) {
+	const ctx = getRequestContext();
+	if (!ctx) {
 		throw new Error("jsxStream must be called within a request context");
 	}
 
-	currentContext.header("Content-Type", "text/html; charset=utf-8");
+	ctx.header("Content-Type", "text/html; charset=utf-8");
 	const htmlStream = renderToStream(html);
 
-	return stream(currentContext, async (stream) => {
+	return stream(ctx, async (stream) => {
 		for await (const chunk of htmlStream) {
 			stream.write(chunk);
 		}
@@ -1215,10 +1139,7 @@ export function createHandler<T extends RouteSpec>(
 			);
 		} finally {
 			// clear context and forget layouts for this request
-			if (currentContext) {
-				layoutsByContext.delete(currentContext);
-			}
-			currentContext = null;
+			clearRequestContext();
 		}
 	};
 }
