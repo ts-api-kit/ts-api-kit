@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import ts from "typescript";
 import { createLogger } from "../../utils/logger.ts";
+import { OpenAPIError } from "../errors.ts";
 
 type Json = Record<string, unknown> | Json[] | string | number | boolean | null;
 
@@ -1296,8 +1297,19 @@ export async function generateOpenAPI(
 
 			log.debug(`Derived OpenAPI path: ${openapiPath}`);
 
-			// Process the source file to find exported HTTP methods
-			const operations = processRouteFile(sourceFile, checker);
+			// Process the source file to find exported HTTP methods. Per-file
+			// failures are rewrapped with route context so operators can see
+			// which route blew up instead of just "Error generating OpenAPI".
+			let operations: OperationMap;
+			try {
+				operations = processRouteFile(sourceFile, checker);
+			} catch (cause) {
+				throw OpenAPIError.wrap(cause, {
+					stage: "generator-file",
+					route: openapiPath,
+					filePath: relativePath,
+				});
+			}
 
 			if (Object.keys(operations).length > 0) {
 				openapiSpec.paths[openapiPath] ??= operations;
@@ -1311,10 +1323,22 @@ export async function generateOpenAPI(
 		openapiSpec.components.schemas = schemaRegistry.getSchemas();
 
 		// Write the generated OpenAPI spec to file
-		await fs.writeFile(outputPath, JSON.stringify(openapiSpec, null, 2));
+		try {
+			await fs.writeFile(outputPath, JSON.stringify(openapiSpec, null, 2));
+		} catch (cause) {
+			throw OpenAPIError.wrap(cause, {
+				stage: "generator-write",
+				filePath: outputPath,
+			});
+		}
 		log.info(`✅ OpenAPI specification generated: ${outputPath}`);
 	} catch (error) {
-		log.error("❌ Error generating OpenAPI specification:", error);
+		if (error instanceof OpenAPIError) {
+			log.error(`❌ ${error.message}`);
+			if (error.cause && error.cause !== error) log.error(error.cause);
+		} else {
+			log.error("❌ Error generating OpenAPI specification:", error);
+		}
 		process.exit(1);
 	}
 }

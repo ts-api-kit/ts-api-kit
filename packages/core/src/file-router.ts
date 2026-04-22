@@ -5,6 +5,7 @@ import type { Handler, Hono, MiddlewareHandler } from "hono";
 import { dirname, join, relative as relPath, resolve } from "pathe";
 import { configToMiddleware, type DirConfig } from "./config.ts";
 import { registerScopedError, registerScopedNotFound } from "./hooks.ts";
+import { OpenAPIError } from "./openapi/errors.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
 import {
@@ -541,15 +542,27 @@ export async function mountFileRouter(
 
 			// Validation: ensure consistency between export name and declared method
 			if (mergedOA.method && mergedOA.method !== method) {
-				throw new Error(
+				throw new OpenAPIError(
 					`OpenAPI method conflict: export "${exportName}" suggests "${method}" but OpenAPI declares "${mergedOA.method}".`,
+					{
+						stage: "route-method-conflict",
+						route: openapi,
+						method,
+						filePath: file,
+					},
 				);
 			}
 
 			// Validation: ensure consistency between derived and declared path
 			if (mergedOA.path && mergedOA.path !== openapi) {
-				throw new Error(
+				throw new OpenAPIError(
 					`OpenAPI path conflict: file "${file}" derives "${openapi}" but OpenAPI declares "${mergedOA.path}".`,
+					{
+						stage: "route-path-conflict",
+						route: openapi,
+						method,
+						filePath: file,
+					},
 				);
 			}
 
