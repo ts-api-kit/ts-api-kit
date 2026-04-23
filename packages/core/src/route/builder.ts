@@ -83,28 +83,41 @@ type ResponseStatuses<R> = R extends Record<number, unknown>
 // Typed `res` function — overloads mirror the declared responses.
 // ──────────────────────────────────────────────────────────────
 
+type TypedResMethods = {
+	redirect: (url: string, status?: RedirectStatus) => Response;
+	file: (
+		data: Blob | ArrayBuffer | Uint8Array,
+		filename?: string,
+		init?: ResInit,
+	) => Response;
+	html: ResRuntime["html"];
+	text: ResRuntime["text"];
+	jsx: ResRuntime["jsx"];
+	stream: ResRuntime["stream"];
+	suspense: ResRuntime["suspense"];
+};
+
+/** Emit a response for one of the declared status codes. */
+type TypedResByStatus<R extends AnyResponses> = <
+	Code extends ResponseStatuses<R>,
+>(
+	status: Code,
+	body: ResponseBody<R, Code>,
+	init?: ResInit,
+) => Response;
+
+// Only surfaces the `res(body)` shortcut when the response map declares
+// `200`. Otherwise the call signature collapses to `object`, leaving
+// only the status-first overload.
+type TypedResShortcut<R extends AnyResponses> = 200 extends ResponseStatuses<R>
+	? /** Emit a `200 OK` response. Only available when `200` is declared. */
+		(body: ResponseBody<R, 200>, init?: ResInit) => Response
+	: object;
+
 type TypedRes<S extends Spec> = S["responses"] extends AnyResponses
-	? {
-			/** Emit a response for one of the declared status codes. */
-			<Code extends ResponseStatuses<S["responses"]>>(
-				status: Code,
-				body: ResponseBody<S["responses"], Code>,
-				init?: ResInit,
-			): Response;
-			/** Emit a `200 OK` response. Only available when `200` is declared. */
-			(body: ResponseBody<S["responses"], 200>, init?: ResInit): Response;
-			redirect: (url: string, status?: RedirectStatus) => Response;
-			file: (
-				data: Blob | ArrayBuffer | Uint8Array,
-				filename?: string,
-				init?: ResInit,
-			) => Response;
-			html: ResRuntime["html"];
-			text: ResRuntime["text"];
-			jsx: ResRuntime["jsx"];
-			stream: ResRuntime["stream"];
-			suspense: ResRuntime["suspense"];
-		}
+	? TypedResByStatus<S["responses"]> &
+			TypedResShortcut<S["responses"]> &
+			TypedResMethods
 	: ResRuntime;
 
 // ──────────────────────────────────────────────────────────────

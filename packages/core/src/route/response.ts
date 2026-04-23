@@ -150,9 +150,9 @@ export type ResRuntime = {
 		init?: ResInit,
 	) => Response;
 	/** `text/html` response with a pre-rendered string. */
-	html: (body: TextLikeBody, init?: ResInit) => Response | Promise<Response>;
+	html: (body: TextLikeBody, init?: ResInit) => Promise<Response>;
 	/** `text/plain` response. */
-	text: (body: TextLikeBody, init?: ResInit) => Response | Promise<Response>;
+	text: (body: TextLikeBody, init?: ResInit) => Promise<Response>;
 	/** JSX/HTML response that renders a component tree to a string. */
 	jsx: (node: JsxBody, init?: ResInit) => Promise<Response>;
 	/** Chunked streaming response. `write` appends a chunk; resolve to close. */

@@ -101,4 +101,61 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 		assert.equal(schema.properties?.count?.type, "number");
 		assert.deepEqual(schema.required?.sort(), ["count", "title"]);
 	});
+
+	it("converts zod response header schemas to JSON Schema on the response", () => {
+		const b = freshBuilder();
+		b.addOperation({
+			method: "get",
+			path: "/rate",
+			summary: "",
+			responses: {
+				200: q.type<unknown>({
+					description: "OK",
+					headers: { "x-ratelimit-reset": z.number() },
+				}),
+			},
+		});
+
+		const response = b.toJSON().paths["/rate"].get.responses["200"];
+		const headers = response.headers ?? {};
+		const entry = headers["x-ratelimit-reset"] as {
+			schema?: { type?: string };
+		};
+		assert.ok(entry, "expected the header entry");
+		assert.equal(entry.schema?.type, "number");
+	});
+
+	it("fills in a default response description when none is declared", () => {
+		const b = freshBuilder();
+		b.addOperation({
+			method: "get",
+			path: "/defaults",
+			summary: "",
+			responses: {
+				204: q.type<void>(),
+				404: q.type<{ code: string }>(),
+				500: q.type<{ message: string }>(),
+			},
+		});
+
+		const { responses } = b.toJSON().paths["/defaults"].get;
+		assert.equal(responses["204"].description, "Success");
+		assert.equal(responses["404"].description, "Client error");
+		assert.equal(responses["500"].description, "Server error");
+	});
+
+	it("preserves an explicit response description over the default", () => {
+		const b = freshBuilder();
+		b.addOperation({
+			method: "get",
+			path: "/custom",
+			summary: "",
+			responses: {
+				404: q.type<{ code: string }>({ description: "User not found" }),
+			},
+		});
+
+		const response = b.toJSON().paths["/custom"].get.responses["404"];
+		assert.equal(response.description, "User not found");
+	});
 });

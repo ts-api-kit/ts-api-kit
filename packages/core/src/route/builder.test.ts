@@ -216,6 +216,45 @@ describe("route() builder", () => {
 		assert.equal(await r.text(), "<h1>Hi</h1>");
 	});
 
+	it("res.text returns a plain text response", async () => {
+		const h = route()
+			.returns<string>()
+			.handle(async ({ res }) => res.text("hello"));
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.equal(r.headers.get("content-type"), "text/plain; charset=utf-8");
+		assert.equal(await r.text(), "hello");
+	});
+
+	it("res.jsx renders a string node to an HTML response", async () => {
+		const h = route()
+			.returns<string>()
+			.handle(async ({ res }) => res.jsx("<section>Hi</section>"));
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.equal(r.headers.get("content-type"), "text/html; charset=utf-8");
+		assert.equal(await r.text(), "<section>Hi</section>");
+	});
+
+	it("res.stream writes chunks in order through the streaming response", async () => {
+		const h = route()
+			.returns<string>()
+			.handle(async ({ res }) =>
+				res.stream(async (write) => {
+					write("one\n");
+					write("two\n");
+					write("three");
+				}),
+			);
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.equal(r.headers.get("content-type"), "text/html; charset=utf-8");
+		assert.equal(await r.text(), "one\ntwo\nthree");
+	});
+
 	it("exposes `env` to the handler (populated by the Hono context)", async () => {
 		const h = route()
 			.returns<{ greeting: string }>()
