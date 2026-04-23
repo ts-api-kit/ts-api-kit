@@ -38,6 +38,58 @@ describe("simple-example smoke", () => {
 		assert.equal(res.status, 400);
 	});
 
+	it("serves an rfc-demo route built with `route().params().returns().handle()`", async () => {
+		const server = new Server();
+		await server.configureRoutes(routesDir);
+
+		const res = await server.fetch(new Request("http://localhost/rfc-demo/7"));
+		assert.equal(res.status, 200);
+
+		const body = (await res.json()) as { id?: number; name?: string };
+		assert.equal(body.id, 7);
+		assert.equal(body.name, "User 7");
+	});
+
+	it("paginates an rfc-demo list with coerced query params", async () => {
+		const server = new Server();
+		await server.configureRoutes(routesDir);
+
+		const res = await server.fetch(
+			new Request("http://localhost/rfc-demo?page=1&pageSize=2"),
+		);
+		assert.equal(res.status, 200);
+
+		const body = (await res.json()) as {
+			items?: unknown[];
+			page?: number;
+			pageSize?: number;
+			total?: number;
+		};
+		assert.equal(body.page, 1);
+		assert.equal(body.pageSize, 2);
+		assert.equal(body.items?.length, 2);
+		assert.equal(body.total, 3);
+	});
+
+	it("emits the typed error status from an rfc-demo `res(401, ...)`", async () => {
+		const server = new Server();
+		await server.configureRoutes(routesDir);
+
+		const res = await server.fetch(
+			new Request("http://localhost/rfc-demo", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					authorization: "NotBearer abc",
+				},
+				body: JSON.stringify({ name: "Ada", email: "ada@x.com" }),
+			}),
+		);
+		assert.equal(res.status, 401);
+		const body = (await res.json()) as { code?: string };
+		assert.equal(body.code, "unauthorized");
+	});
+
 	it("exposes the generated /openapi.json with zod query parameters populated", async () => {
 		const server = new Server();
 		await server.configureRoutes(routesDir);

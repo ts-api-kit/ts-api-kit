@@ -19,6 +19,7 @@ export * from "./openapi/builder.ts";
 export * from "./openapi/markers.ts";
 export * from "./openapi/presets.ts";
 export * from "./openapi/registry.ts";
+export * from "./route/index.ts";
 export * from "./server.ts";
 export { default as Server } from "./server.ts";
 
