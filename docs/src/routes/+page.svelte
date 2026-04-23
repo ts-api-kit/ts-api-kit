@@ -174,7 +174,7 @@
 						<nav
 							class="hidden items-center gap-1 text-sm font-medium text-muted-foreground lg:flex"
 						>
-							{#each TOP_NAV_LINKS as link}
+							{#each TOP_NAV_LINKS as link (link.href)}
 								<a
 									href={link.href}
 									class="rounded-md px-3 py-1.5 transition-colors hover:bg-muted/60 hover:text-foreground"
@@ -264,7 +264,7 @@
 						</section>
 
 						<section class="grid gap-4 md:grid-cols-3">
-							{#each featureHighlights as feature}
+							{#each featureHighlights as feature (feature.title)}
 								<Card class="border-border/70 bg-muted/20">
 									<CardHeader class="flex flex-row items-center gap-3 pb-2">
 										<feature.icon class="size-5 text-primary" />
@@ -298,13 +298,13 @@
 							<div class="space-y-4 px-4 py-4">
 								<Tabs bind:value={installTab} class="space-y-4">
 									<TabsList class="flex w-full flex-wrap gap-2 rounded-lg bg-muted/40 p-1">
-										{#each installTabs as option}
+										{#each installTabs as option (option.value)}
 											<TabsTrigger value={option.value} class="flex-1">
 												{option.label}
 											</TabsTrigger>
 										{/each}
 									</TabsList>
-									{#each installTabs as option}
+									{#each installTabs as option (option.value)}
 										<TabsContent value={option.value} class="mt-0">
 											<div
 												class="relative overflow-hidden rounded-lg border border-border/70 bg-background font-mono text-sm"
@@ -341,7 +341,7 @@
 									Use these links to dive deeper into the essentials.
 								</p>
 								<div class="grid gap-4 md:grid-cols-3">
-									{#each quickLinks as link}
+									{#each quickLinks as link (link.href)}
 										<a
 											href={link.href}
 											class="group flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/20 p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
@@ -373,7 +373,7 @@
 								On this page
 							</p>
 							<nav class="mt-3 flex flex-col gap-1 text-sm text-muted-foreground">
-								{#each tableOfContents as item}
+								{#each tableOfContents as item (item.id)}
 									<a
 										href={`#${item.id}`}
 										class="rounded-md px-2 py-1 transition-colors hover:bg-muted/50 hover:text-foreground"

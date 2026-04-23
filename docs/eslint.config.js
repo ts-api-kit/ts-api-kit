@@ -25,18 +25,44 @@ export default defineConfig(
 			// typescript-eslint strongly recommend that you do not use the no-undef lint rule on TypeScript projects.
 			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
 			'no-undef': 'off',
-			// Demoted to warnings while the shadcn-svelte port is still in flight.
-			// Upstream shadcn-svelte templates frequently ship without explicit
-			// each-keys, raw anchor tags, or SvelteSet wrappers — fixing them case
-			// by case belongs in a follow-up dedicated pass, not in the merge that
-			// lands the port.
-			'svelte/require-each-key': 'warn',
-			'svelte/no-navigation-without-resolve': 'warn',
-			'svelte/prefer-svelte-reactivity': 'warn',
+			// All three rules are back at error level now that the first-party
+			// code in this workspace passes them. Shadcn-svelte templates that
+			// can't comply (generic anchor primitives, auto-imported tables)
+			// are downgraded below on a per-glob basis — prefer that over
+			// disabling repo-wide.
+			'svelte/require-each-key': 'error',
+			'svelte/no-navigation-without-resolve': 'error',
+			'svelte/prefer-svelte-reactivity': 'error',
 			'@typescript-eslint/no-unused-vars': [
 				'error',
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
 			]
+		}
+	},
+	{
+		// Components under `src/lib/components/ui/` come from the shadcn-svelte
+		// registry. They're generic primitives (e.g. Button forwards an
+		// unrestricted href to <a>) and a mutable auto-tracked data-table
+		// backing store that's expected to use a plain Set for perf reasons.
+		// Rewriting them diverges from the shadcn upstream for no practical
+		// gain, so the two rules the registry violates are demoted there.
+		files: ['src/lib/components/ui/**/*.{svelte,ts,js}'],
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off',
+			'svelte/prefer-svelte-reactivity': 'off'
+		}
+	},
+	{
+		// The landing page builds its nav from plain-text data arrays whose
+		// hrefs are a mix of in-page anchors (`#...`) and external URLs (with
+		// `target="_blank"`). `svelte/no-navigation-without-resolve` wants
+		// every `<a href>` wrapped with `resolveRoute()`, but that helper
+		// throws on non-route hrefs, so the rule's prescription breaks this
+		// page. Disable it for this file; when the page is restructured to
+		// use real route patterns this override can go.
+		files: ['src/routes/+page.svelte'],
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	},
 	{

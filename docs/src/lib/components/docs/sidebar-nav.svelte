@@ -34,12 +34,12 @@
 	}
 </script>
 
-{#each sections as section}
+{#each sections as section (section.title)}
 	<SidebarGroup>
 		<SidebarGroupLabel>{section.title}</SidebarGroupLabel>
 		<SidebarGroupContent>
 			<SidebarMenu>
-				{#each section.items as item}
+				{#each section.items as item (item.href)}
 					<SidebarMenuItem>
 						<SidebarButton isActive={item.href === activeHref} onclick={() => navigateTo(item)}>
 							<span class="truncate">{item.title}</span>

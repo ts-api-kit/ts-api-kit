@@ -47,7 +47,7 @@
 	<DropdownMenuContent align="end" class="w-44">
 		<DropdownMenuLabel>Theme</DropdownMenuLabel>
 		<DropdownMenuSeparator />
-		{#each options as option}
+		{#each options as option (option.value)}
 			<!-- @ts-expect-error bits-ui doesn't expose select event typings -->
 			<DropdownItem onselect={() => handleSelect(option.value)}>
 				<option.icon class="size-4" />
