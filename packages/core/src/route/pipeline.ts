@@ -7,7 +7,9 @@
 import type { Context, Handler } from "hono";
 import {
 	bindRequestContext,
-	buildCookies,
+	buildCookieSink,
+	type Cookies,
+	type ResolvedEnv,
 	setCurrentFilePath,
 	unbindRequestContext,
 } from "./context.ts";
@@ -27,8 +29,8 @@ export type PipelineContext = {
 	headers: Record<string, unknown>;
 	body: unknown;
 	res: ResRuntime;
-	cookies: ReturnType<typeof buildCookies>;
-	env: Record<string, unknown>;
+	cookies: Cookies;
+	env: ResolvedEnv;
 	url: URL;
 	method: string;
 	/** Raw Hono context. Escape hatch — use sparingly. */
@@ -149,6 +151,7 @@ export function buildHandler(options: BuildHandlerOptions): Handler {
 			const [params, query, headers, body] = results.map((r) => r.value);
 
 			const res = buildRes();
+			const sink = buildCookieSink(c);
 
 			const ctx: PipelineContext = {
 				params: (params ?? rawParams) as Record<string, unknown>,
@@ -156,14 +159,23 @@ export function buildHandler(options: BuildHandlerOptions): Handler {
 				headers: (headers ?? rawHeaders) as Record<string, unknown>,
 				body,
 				res,
-				cookies: buildCookies(c),
-				env: (c.env ?? {}) as Record<string, unknown>,
+				cookies: sink.cookies,
+				env: (c.env ?? {}) as ResolvedEnv,
 				url: new URL(c.req.url),
 				method: c.req.method,
 				raw: c,
 			};
 
-			return await handler(ctx);
+			const response = await handler(ctx);
+
+			// Merge any cookies queued via `ctx.cookies.set()` /
+			// `.delete()` onto the Response the handler returned.
+			// Appending (rather than setting) preserves multiple
+			// Set-Cookie entries as separate header values.
+			const pending = sink.drain();
+			if (pending.length === 0) return response;
+			for (const value of pending) response.headers.append("Set-Cookie", value);
+			return response;
 		} finally {
 			unbindRequestContext();
 		}

@@ -10,7 +10,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { Handler } from "hono";
 import type { ZodTypeAny, z } from "zod";
 import { lazyRegister } from "../openapi/registry.ts";
-import type { buildCookies, LayoutComponent } from "./context.ts";
+import type { Cookies, LayoutComponent, ResolvedEnv } from "./context.ts";
 import {
 	buildHandler,
 	type PipelineContext,
@@ -123,9 +123,13 @@ export type RouteHandlerContext<S extends Spec> = {
 	/** Typed response emitter. */
 	res: TypedRes<S>;
 	/** Read/write cookies for the current request. */
-	cookies: ReturnType<typeof buildCookies>;
-	/** Runtime environment (Cloudflare Workers bindings, etc). */
-	env: Record<string, unknown>;
+	cookies: Cookies;
+	/**
+	 * Runtime environment bindings. Typed against the `Env` interface
+	 * in `@ts-api-kit/core` — augment that interface in your app to
+	 * surface Cloudflare/KV/Secrets here.
+	 */
+	env: ResolvedEnv;
 	/** Parsed request URL. */
 	url: URL;
 	/** HTTP method in uppercase. */

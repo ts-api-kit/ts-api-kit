@@ -1,41 +1,60 @@
-import * as v from "valibot";
+// Reusable schemas for common request shapes. Plain zod objects built
+// on top of the `q` coercing primitives — drop them into `.query()`,
+// `.params()`, or `.headers()` as-is, or `.extend({...})` to add
+// route-specific fields.
 
-type VSchema = v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>;
+import { z } from "zod";
+import { q } from "../route/q.ts";
 
-// Common Valibot schemas to reuse in routes
 /**
- * Common pagination query parameters schema.
- * Includes page and pageSize with default values.
+ * Pagination query: `?page=1&pageSize=20`. Both fields are optional;
+ * callers typically read them with defaults in the handler.
+ *
+ * @example
+ * ```ts
+ * route().query(PaginationQuery).handle(({ query, res }) => {
+ *   const page = query.page ?? 1;
+ *   const pageSize = query.pageSize ?? 20;
+ *   return res({ page, pageSize });
+ * });
+ * ```
  */
-export const PaginationQuery: VSchema = v.object({
-	page: v.optional(v.number(), 1),
-	pageSize: v.optional(v.number(), 20),
+export const PaginationQuery = z.object({
+	page: q.int({ min: 1 }).optional(),
+	pageSize: q.int({ min: 1, max: 200 }).optional(),
 });
 
 /**
- * Common ID parameter schema for route parameters.
- * Transforms string ID to number.
+ * Common `/{id}` path param coerced to a positive integer.
+ *
+ * @example
+ * ```ts
+ * route().params(IdParam).returns<User>().handle(({ params, res }) => {
+ *   return res(findUserById(params.id));
+ * });
+ * ```
  */
-export const IdParam: VSchema = v.object({
-	id: v.pipe(
-		v.string(),
-		v.transform((s: string) => Number(s)),
-	),
+export const IdParam = z.object({
+	id: q.int({ min: 1 }),
 });
 
-/**
- * Common base headers schema for request validation.
- * Includes optional request ID header.
- */
-export const BaseHeaders: VSchema = v.object({
-	"x-request-id": v.optional(v.string()),
+/** Common tracing headers — `x-request-id` correlation and locale hint. */
+export const TracingHeaders = z.object({
+	"x-request-id": q.str().optional(),
+	"accept-language": q.str().optional(),
 });
 
-/**
- * Common error response schema for API error handling.
- * Includes error message and optional validation issues.
- */
-export const ErrorSchema: VSchema = v.object({
-	message: v.string(),
-	issues: v.optional(v.array(v.object({ path: v.any(), message: v.string() }))),
+/** Canonical API error body returned alongside 4xx/5xx status codes. */
+export const ErrorSchema = z.object({
+	code: z.string(),
+	message: z.string(),
+	issues: z
+		.array(
+			z.object({
+				path: z.array(z.union([z.string(), z.number()])),
+				message: z.string(),
+			}),
+		)
+		.optional(),
+	details: z.unknown().optional(),
 });

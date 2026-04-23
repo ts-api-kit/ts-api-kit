@@ -166,4 +166,79 @@ describe("route() builder", () => {
 		const rB = await hit(bH, new Request("http://x/?b=7"));
 		assert.deepEqual(await rB.json(), { b: 7 });
 	});
+
+	it("exposes cookies through the handler context with read + append", async () => {
+		const h = route()
+			.returns<{ visits: number }>()
+			.handle(async ({ cookies, res }) => {
+				const current = Number(cookies.get("visits") ?? 0);
+				const next = current + 1;
+				cookies.set("visits", String(next), {
+					httpOnly: true,
+					sameSite: "Lax",
+				});
+				return res({ visits: next });
+			});
+
+		const first = await hit(
+			h,
+			new Request("http://x/", { headers: { cookie: "visits=4" } }),
+		);
+		assert.equal(first.status, 200);
+		assert.deepEqual(await first.json(), { visits: 5 });
+		const setCookie = first.headers.get("set-cookie");
+		assert.ok(setCookie);
+		assert.ok(setCookie.includes("visits=5"));
+		assert.ok(setCookie.includes("HttpOnly"));
+		assert.ok(setCookie.includes("SameSite=Lax"));
+	});
+
+	it("routes a typed `res.redirect` through the Response status + Location", async () => {
+		const h = route()
+			.returns({
+				303: q.type<void>(),
+			})
+			.handle(async ({ res }) => res.redirect("/dest", 303));
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 303);
+		assert.equal(r.headers.get("location"), "/dest");
+	});
+
+	it("res.html returns an HTML response with the charset content-type", async () => {
+		const h = route()
+			.returns<string>()
+			.handle(async ({ res }) => res.html("<h1>Hi</h1>"));
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.equal(r.headers.get("content-type"), "text/html; charset=utf-8");
+		assert.equal(await r.text(), "<h1>Hi</h1>");
+	});
+
+	it("exposes `env` to the handler (populated by the Hono context)", async () => {
+		const h = route()
+			.returns<{ greeting: string }>()
+			.handle(async ({ env, res }) =>
+				res({
+					greeting: String((env as { GREETING?: string }).GREETING ?? ""),
+				}),
+			);
+
+		// Inject env directly via a Hono app middleware — it's how
+		// `@hono/node-server` + `@cloudflare/workers-types` wire bindings
+		// in production.
+		const app = new Hono();
+		app.use("*", async (c, next) => {
+			(c as unknown as { env: Record<string, unknown> }).env = {
+				GREETING: "Hello",
+			};
+			await next();
+		});
+		app.get("/", h as unknown as Handler);
+
+		const r = await app.fetch(new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.deepEqual(await r.json(), { greeting: "Hello" });
+	});
 });

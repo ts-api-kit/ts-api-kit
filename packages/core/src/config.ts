@@ -34,6 +34,27 @@ export type DirConfig = {
 	};
 };
 
+/**
+ * Type helper for authoring `+config.ts`. At runtime it's a
+ * pass-through; its only job is to give `config` literals a narrow
+ * type without requiring `satisfies DirConfig` at every call site.
+ *
+ * @example
+ * ```ts
+ * // +config.ts
+ * import { defineConfig } from "@ts-api-kit/core";
+ *
+ * export default defineConfig({
+ *   body: { limit: 1_048_576 },
+ *   cors: { origin: "*" },
+ *   timeout: { ms: 5000 },
+ * });
+ * ```
+ */
+export function defineConfig(config: DirConfig): DirConfig {
+	return config;
+}
+
 function toArray<T>(v: T | T[] | undefined): T[] {
 	return Array.isArray(v) ? v : v ? [v] : [];
 }
