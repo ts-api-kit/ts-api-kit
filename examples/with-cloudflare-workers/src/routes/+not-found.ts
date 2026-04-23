@@ -1,5 +1,4 @@
-import { handleNotFound } from "@ts-api-kit/core";
+import type { Context } from "hono";
 
-export default handleNotFound(async (c) => {
-	return c.json({ error: "Custom Not Found" }, 404);
-});
+export default async (c: Context) =>
+	c.json({ error: "Custom Not Found" }, 404);

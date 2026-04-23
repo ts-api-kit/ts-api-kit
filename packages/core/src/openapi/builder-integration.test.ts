@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as v from "valibot";
 import * as z from "zod";
+import { q } from "../route/q.ts";
 import { OpenAPIBuilder } from "./builder.ts";
-import { response } from "./markers.ts";
 
 const freshBuilder = () =>
 	new OpenAPIBuilder({ title: "test", version: "0.0.0" });
@@ -27,7 +27,7 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 					page: z.number(),
 				}),
 			},
-			responses: { 200: response.of<unknown>() },
+			responses: { 200: q.type<unknown>() },
 		});
 
 		const params = b.toJSON().paths["/"].get.parameters ?? [];
@@ -58,7 +58,7 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 					page: v.number(),
 				}),
 			},
-			responses: { 200: response.of<unknown>() },
+			responses: { 200: q.type<unknown>() },
 		});
 
 		const params = b.toJSON().paths["/"].get.parameters ?? [];
@@ -86,7 +86,7 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 			request: {
 				body: z.object({ title: z.string(), count: z.number() }),
 			},
-			responses: { 200: response.of<unknown>() },
+			responses: { 200: q.type<unknown>() },
 		});
 
 		const body = b.toJSON().paths["/items"].post.requestBody;

@@ -1,6 +1,6 @@
-import { handleError } from "@ts-api-kit/core";
+import type { Context } from "hono";
 
-export default handleError(async (err, c) => {
+export default async (err: unknown, c: Context) => {
 	const message = err instanceof Error ? err.message : String(err);
 	return c.json({ error: "Custom Error", message }, 500);
-});
+};

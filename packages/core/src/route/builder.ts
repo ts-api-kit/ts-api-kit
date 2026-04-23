@@ -1,18 +1,23 @@
 // Fluent route builder. Accumulates request schemas, response markers,
 // and OpenAPI metadata into an immutable spec. `.handle(fn)` finalises
-// the builder and emits a Hono-compatible handler by delegating to the
-// existing `createHandler` under the hood — so the runtime semantics
-// (validation, OpenAPI registration, middleware chain) are unchanged.
+// the chain and produces a Hono-compatible handler via the route
+// pipeline in `pipeline.ts`.
+//
+// This module owns the full public-facing route authoring surface —
+// the `handle()` / `response.of<T>` legacy path is gone.
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { z } from "zod";
+import type { Handler } from "hono";
+import type { ZodTypeAny, z } from "zod";
+import { lazyRegister } from "../openapi/registry.ts";
+import type { buildCookies, LayoutComponent } from "./context.ts";
 import {
-	createHandler,
-	type HandlerContext as LegacyHandlerContext,
-	type RouteSpec as LegacyRouteSpec,
-	type ResponseTools,
-} from "../server.ts";
+	buildHandler,
+	type PipelineContext,
+	type PipelineSpec,
+} from "./pipeline.ts";
 import type { TypeMarker } from "./q.ts";
+import type { RedirectStatus, ResInit, ResRuntime } from "./response.ts";
 
 // ──────────────────────────────────────────────────────────────
 // Spec accumulator
@@ -62,7 +67,6 @@ type Out<S> = S extends undefined
 
 type EmptyIfUndef<T> = [T] extends [undefined] ? Record<string, never> : T;
 
-/** Response body expected for a given status code. */
 type ResponseBody<R, S extends number> = R extends Record<number, unknown>
 	? S extends keyof R
 		? R[S] extends TypeMarker<infer T>
@@ -73,57 +77,61 @@ type ResponseBody<R, S extends number> = R extends Record<number, unknown>
 
 type ResponseStatuses<R> = R extends Record<number, unknown>
 	? Extract<keyof R, number>
-	: 200;
+	: never;
 
 // ──────────────────────────────────────────────────────────────
-// `res` — the unified response emitter
+// Typed `res` function — overloads mirror the declared responses.
 // ──────────────────────────────────────────────────────────────
 
-/** Response init subset accepted by `res(...)`. */
-type ResInit = {
-	headers?: Record<string, string>;
-	contentType?: string;
-};
-
-type ResFn<S extends Spec> = S["responses"] extends AnyResponses
+type TypedRes<S extends Spec> = S["responses"] extends AnyResponses
 	? {
-			// Explicit status variant — must be one of the declared statuses.
+			/** Emit a response for one of the declared status codes. */
 			<Code extends ResponseStatuses<S["responses"]>>(
 				status: Code,
 				body: ResponseBody<S["responses"], Code>,
 				init?: ResInit,
 			): Response;
-			// Shortcut variant — only valid when 200 is declared.
+			/** Emit a `200 OK` response. Only available when `200` is declared. */
 			(body: ResponseBody<S["responses"], 200>, init?: ResInit): Response;
-			/** Redirect response. Status defaults to 302. */
-			redirect(url: string, status?: 301 | 302 | 303 | 307 | 308): Response;
-			/** Binary file response. */
-			file(
+			redirect: (url: string, status?: RedirectStatus) => Response;
+			file: (
 				data: Blob | ArrayBuffer | Uint8Array,
 				filename?: string,
 				init?: ResInit,
-			): Response;
+			) => Response;
+			html: ResRuntime["html"];
+			text: ResRuntime["text"];
+			jsx: ResRuntime["jsx"];
+			stream: ResRuntime["stream"];
+			suspense: ResRuntime["suspense"];
 		}
-	: {
-			(body: unknown, init?: ResInit): Response;
-			redirect(url: string, status?: 301 | 302 | 303 | 307 | 308): Response;
-			file(
-				data: Blob | ArrayBuffer | Uint8Array,
-				filename?: string,
-				init?: ResInit,
-			): Response;
-		};
+	: ResRuntime;
 
 // ──────────────────────────────────────────────────────────────
 // Handler context exposed to user code
 // ──────────────────────────────────────────────────────────────
 
 export type RouteHandlerContext<S extends Spec> = {
-	query: EmptyIfUndef<Out<S["query"]>>;
-	body: Out<S["body"]>;
-	headers: EmptyIfUndef<Out<S["headers"]>>;
+	/** Validated path params. */
 	params: EmptyIfUndef<Out<S["params"]>>;
-	res: ResFn<S>;
+	/** Validated query params. */
+	query: EmptyIfUndef<Out<S["query"]>>;
+	/** Validated request headers. */
+	headers: EmptyIfUndef<Out<S["headers"]>>;
+	/** Validated request body. */
+	body: Out<S["body"]>;
+	/** Typed response emitter. */
+	res: TypedRes<S>;
+	/** Read/write cookies for the current request. */
+	cookies: ReturnType<typeof buildCookies>;
+	/** Runtime environment (Cloudflare Workers bindings, etc). */
+	env: Record<string, unknown>;
+	/** Parsed request URL. */
+	url: URL;
+	/** HTTP method in uppercase. */
+	method: string;
+	/** Raw Hono context. Escape hatch — use sparingly. */
+	raw: PipelineContext["raw"];
 };
 
 type HandlerFn<S extends Spec> = (
@@ -134,16 +142,24 @@ type HandlerFn<S extends Spec> = (
 // Builder
 // ──────────────────────────────────────────────────────────────
 
+/**
+ * Fluent route builder. Accumulates an immutable spec across chain
+ * calls; `.handle(fn)` returns a Hono-compatible handler.
+ */
 export interface RouteBuilder<S extends Spec> {
+	/** Declare the query schema (usually a `z.object({...})`). */
 	query<Q extends AnySchema>(
 		schema: Q,
 	): RouteBuilder<Omit<S, "query"> & { query: Q }>;
+	/** Declare the JSON body schema. */
 	body<B extends AnySchema>(
 		schema: B,
 	): RouteBuilder<Omit<S, "body"> & { body: B }>;
+	/** Declare the request-header schema. */
 	headers<H extends AnySchema>(
 		schema: H,
 	): RouteBuilder<Omit<S, "headers"> & { headers: H }>;
+	/** Declare the path-param schema. */
 	params<P extends AnySchema>(
 		schema: P,
 	): RouteBuilder<Omit<S, "params"> & { params: P }>;
@@ -153,11 +169,9 @@ export interface RouteBuilder<S extends Spec> {
 	 * `.returns({ 200: q.type<T>() })`.
 	 */
 	returns<T>(): RouteBuilder<
-		Omit<S, "responses"> & {
-			responses: { 200: TypeMarker<T> };
-		}
+		Omit<S, "responses"> & { responses: { 200: TypeMarker<T> } }
 	>;
-	/** Declare a map of responses keyed by status code. */
+	/** Declare a response map keyed by status code. */
 	returns<R extends AnyResponses>(
 		responses: R,
 	): RouteBuilder<Omit<S, "responses"> & { responses: R }>;
@@ -170,11 +184,8 @@ export interface RouteBuilder<S extends Spec> {
 	security(...s: Array<Record<string, string[]>>): RouteBuilder<S>;
 	externalDocs(url: string, description?: string): RouteBuilder<S>;
 
-	/**
-	 * Finalises the builder and returns a Hono-compatible handler.
-	 * The returned function is also assignable to `GET`/`POST`/etc.
-	 */
-	handle(fn: HandlerFn<S>): ReturnType<typeof createHandler>;
+	/** Finalise the chain. Returns a Hono-compatible handler. */
+	handle(fn: HandlerFn<S>): Handler;
 }
 
 class RouteBuilderImpl<S extends Spec> {
@@ -216,7 +227,7 @@ class RouteBuilderImpl<S extends Spec> {
 	returns<R extends AnyResponses>(
 		responses: R,
 	): RouteBuilderImpl<S & { responses: R }>;
-	// biome-ignore lint/suspicious/noExplicitAny: overload implementation signature — users see the typed overloads above.
+	// biome-ignore lint/suspicious/noExplicitAny: overload implementation — users see the typed overloads above.
 	returns(responses?: AnyResponses): any {
 		const r =
 			responses ??
@@ -249,143 +260,51 @@ class RouteBuilderImpl<S extends Spec> {
 		});
 	}
 
-	handle(fn: HandlerFn<S>) {
-		// Translate this builder's spec to the legacy `RouteSpec` shape
-		// `createHandler` expects.
-		const legacySpec: LegacyRouteSpec = {
-			query: this.spec.query as LegacyRouteSpec["query"],
-			body: this.spec.body as LegacyRouteSpec["body"],
-			headers: this.spec.headers as LegacyRouteSpec["headers"],
-			params: this.spec.params as LegacyRouteSpec["params"],
-			openapi: {
-				summary: this.meta.summary,
-				tags: this.meta.tags,
-				responses: this.spec.responses as Record<
-					number,
-					unknown
-				> as LegacyRouteSpec extends { openapi?: { responses?: infer R } }
-					? R
-					: never,
-				// The legacy shape also carries request schemas here when set;
-				// file-router picks either shape. Populating both keeps parity.
-				request: {
-					query: this.spec.query as AnySchema,
-					body: this.spec.body as AnySchema,
-					headers: this.spec.headers as AnySchema,
-					params: this.spec.params as AnySchema,
-				} as LegacyRouteSpec extends { openapi?: { request?: infer R } }
-					? R
-					: never,
-			},
+	handle(fn: HandlerFn<S>): Handler {
+		const pipelineSpec: PipelineSpec = {
+			params: this.spec.params,
+			query: this.spec.query,
+			headers: this.spec.headers,
+			body: this.spec.body,
 		};
 
-		// Wrap the user's fn so it sees our richer `res` instead of the legacy
-		// ResponseTools bag. The legacy `response` tools remain accessible on
-		// the wrapped context for the few helpers we delegate to (e.g. file).
-		const h = createHandler(legacySpec, async (legacyCtx) => {
-			const res = buildResFn(
-				(legacyCtx as unknown as { response: ResponseTools<LegacyRouteSpec> })
-					.response,
-			);
-			const ctx = {
-				query: (legacyCtx as LegacyHandlerContext<LegacyRouteSpec>).query,
-				body: (legacyCtx as LegacyHandlerContext<LegacyRouteSpec>).body,
-				headers: (legacyCtx as LegacyHandlerContext<LegacyRouteSpec>).headers,
-				params: (legacyCtx as LegacyHandlerContext<LegacyRouteSpec>).params,
-				res,
-			} as unknown as RouteHandlerContext<S>;
-			return fn(ctx);
+		const hono = buildHandler({
+			spec: pipelineSpec,
+			handler: async (ctx) => fn(ctx as unknown as RouteHandlerContext<S>),
 		});
 
 		// The file-router reads `handler.__routeConfig.openapi` at mount
 		// time to register OpenAPI metadata *before* any request has
-		// fired. Without this, the runtime `/openapi.json` handler only
-		// sees the lazy registration that fires after the route's first
-		// invocation — and a test that just hits `/openapi.json` without
-		// warming the route up first would see empty metadata. Attach it
-		// the same way the legacy `handle()` does.
-		(h as unknown as { __routeConfig: LegacyRouteSpec }).__routeConfig =
-			legacySpec;
-		return h;
+		// fired. Attach it so a cold `/openapi.json` hit sees the
+		// fully-populated document.
+		const routeConfig = {
+			openapi: {
+				summary: this.meta.summary,
+				description: this.meta.description,
+				tags: this.meta.tags,
+				deprecated: this.meta.deprecated,
+				operationId: this.meta.operationId,
+				security: this.meta.security,
+				externalDocs: this.meta.externalDocs,
+				request: {
+					params: this.spec.params,
+					query: this.spec.query,
+					headers: this.spec.headers,
+					body: this.spec.body,
+				},
+				responses: this.spec.responses,
+			},
+		};
+		(hono as unknown as { __routeConfig: typeof routeConfig }).__routeConfig =
+			routeConfig;
+
+		return hono;
 	}
 }
 
 /**
- * Builds a `res` function that supports both overloads and the
- * utility helpers (`redirect` / `file`). Delegates body serialisation
- * to the legacy `ResponseTools` so streaming/file handling stays
- * consistent with the rest of the framework.
- */
-function buildResFn<S extends Spec>(
-	legacyRes: ResponseTools<LegacyRouteSpec>,
-): ResFn<S> {
-	const isInit = (v: unknown): v is ResInit =>
-		!!v && typeof v === "object" && !Array.isArray(v);
-
-	const fn = ((
-		statusOrBody: number | unknown,
-		bodyOrInit?: unknown,
-		maybeInit?: ResInit,
-	): Response => {
-		// Overload: `res(body)` — implicit 200
-		if (typeof statusOrBody !== "number") {
-			const init = isInit(bodyOrInit) ? (bodyOrInit as ResInit) : undefined;
-			return new Response(JSON.stringify(statusOrBody), {
-				status: 200,
-				headers: {
-					"Content-Type": init?.contentType ?? "application/json",
-					...(init?.headers ?? {}),
-				},
-			});
-		}
-		// Overload: `res(status, body, init?)`
-		const status = statusOrBody;
-		const init = maybeInit ?? {};
-		return new Response(JSON.stringify(bodyOrInit), {
-			status,
-			headers: {
-				"Content-Type": init.contentType ?? "application/json",
-				...(init.headers ?? {}),
-			},
-		});
-	}) as unknown as ResFn<S> & {
-		redirect: (url: string, status?: number) => Response;
-		file: (
-			data: Blob | ArrayBuffer | Uint8Array,
-			filename?: string,
-			init?: ResInit,
-		) => Response;
-	};
-
-	fn.redirect = (url, status = 302) =>
-		legacyRes.redirect(url, status as 301 | 302 | 303 | 307 | 308);
-	fn.file = (data, filename, init) =>
-		// Delegate to the legacy helper which handles Blob/ArrayBuffer/Uint8Array.
-		(
-			legacyRes.file as unknown as (
-				d: Blob | ArrayBuffer | Uint8Array,
-				name?: string,
-				init?: { headers?: Record<string, string> },
-			) => Response
-		)(data, filename, init);
-
-	return fn as ResFn<S>;
-}
-
-/**
- * Entry point for the fluent route builder. Every call returns a
- * fresh builder instance so chains can branch without leaking state.
- *
- * @example
- * ```ts
- * export const GET = route()
- *   .query({ id: q.int() })
- *   .returns<{ user: User }>()
- *   .summary("Fetch user by id")
- *   .handle(async ({ query, res }) => {
- *     return res({ user: findUser(query.id) });
- *   });
- * ```
+ * Entry point for the fluent route builder. Each call returns a fresh
+ * builder so chains can branch without leaking state.
  */
 export function route(): RouteBuilder<EmptySpec> {
 	return new RouteBuilderImpl<EmptySpec>(
@@ -393,3 +312,19 @@ export function route(): RouteBuilder<EmptySpec> {
 		{},
 	) as unknown as RouteBuilder<EmptySpec>;
 }
+
+/** Handler type used internally to register the route with the runtime. */
+export type RouteHandler<S extends Spec = Spec> = Handler & {
+	__routeConfig?: unknown;
+};
+
+/** Layout component type re-exported for `+layout.tsx` authors. */
+export type { LayoutComponent };
+
+// Re-used by `file-router.ts` when it forwards metadata to `lazyRegister`.
+// Exposed through the public API below.
+export type { HandlerFn };
+
+// Re-export so the file-router can call `lazyRegister` without touching
+// the openapi submodule directly (keeps its imports narrow).
+export { lazyRegister };

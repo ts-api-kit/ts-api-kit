@@ -1,68 +1,21 @@
-import type { Context, MiddlewareHandler, Next } from "hono";
-
-export type KitContext = Context;
-export type KitNext = Next;
+import type { MiddlewareHandler } from "hono";
 
 /**
- * Define one or more middlewares in a Hono-agnostic way.
+ * Declare one or more middlewares for a scope. The only reason this
+ * exists is that TypeScript can't infer the array type tightly without
+ * the generic signature — at runtime it's just a thin pass-through.
  *
- * Example usage in a `+middleware.ts` file:
- *   import { defineMiddleware } from "@ts-api-kit/core";
- *   export const middleware = defineMiddleware(async (c, next) => {
- *     // your logic here
- *     await next();
- *   });
+ * @example
+ * ```ts
+ * // +middleware.ts
+ * import { defineMiddleware } from "@ts-api-kit/core";
+ * import { logger } from "hono/logger";
+ *
+ * export default defineMiddleware(logger());
+ * ```
  */
 export function defineMiddleware(
 	...mws: MiddlewareHandler[]
 ): MiddlewareHandler[] {
 	return mws;
-}
-
-/**
- * Ergonomic alias to define middlewares, mirroring the `handle` API.
- *
- * Example:
- *   export const USE = use(logger(), auth())
- */
-export const use: (...mws: MiddlewareHandler[]) => MiddlewareHandler[] =
-	defineMiddleware;
-
-export type NotFoundHandlerFn = (c: Context) => Response | Promise<Response>;
-
-export function handleNotFound(handler: NotFoundHandlerFn): NotFoundHandlerFn {
-	return (c: Context): ReturnType<NotFoundHandlerFn> => handler(c);
-}
-
-export type ErrorHandlerFn = (
-	err: unknown,
-	c: Context,
-) => Response | Promise<Response>;
-
-export function handleError(handler: ErrorHandlerFn): ErrorHandlerFn {
-	return (err: unknown, c: Context): ReturnType<ErrorHandlerFn> =>
-		handler(err, c);
-}
-
-/**
- * Small helper to compose multiple middleware functions.
- */
-export const composeMiddleware = (
-	...mws: MiddlewareHandler[]
-): MiddlewareHandler[] => mws;
-
-/**
- * Convenience factory: basic request logger middleware.
- */
-export function createLoggerMiddleware(): MiddlewareHandler {
-	return async (c, next) => {
-		const start = Date.now();
-		await next();
-		const duration = Date.now() - start;
-		const { method } = c.req;
-		const url = new URL(c.req.url);
-		const status = c.res?.status ?? 0;
-		// eslint-disable-next-line no-console
-		console.log(`${method} ${url.pathname} -> ${status} (${duration}ms)`);
-	};
 }

@@ -4,7 +4,6 @@ import type * as v from "valibot";
 import type * as z from "zod";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
 import { createLogger } from "../utils/logger.ts";
-import type { ResponseMarker } from "./markers.ts";
 import {
 	isZodLiteral,
 	isZodOptional,
@@ -341,6 +340,16 @@ export type OperationConfig = {
 		examples?: Json; // example request body
 	};
 	responses: Record<number, ResponseMarker<AnySchema>>;
+};
+
+/** Phantom-typed response marker carried by `q.type<T>()`. */
+type ResponseMarker<T> = {
+	readonly __phantom__?: T;
+	description?: string;
+	contentType?: string;
+	headers?: Record<string, unknown>;
+	examples?: unknown[];
+	deprecated?: boolean;
 };
 /**
  * Options for the {@link OpenAPIBuilder} root document.

@@ -1,4 +1,4 @@
-import { getRequestEvent, jsxStream, q, route } from "@ts-api-kit/core";
+import { q, route } from "@ts-api-kit/core";
 import { z } from "zod";
 
 // Domain models used across responses
@@ -91,11 +91,9 @@ export const GET = route()
 		"https://github.com/ts-api-kit/ts-api-kit",
 		"TS API Kit project",
 	)
-	.handle(async ({ query, headers, res }) => {
-		const evt = getRequestEvent();
-		const reqId =
-			headers["x-request-id"] ?? evt.headers?.["x-request-id"] ?? undefined;
-		if (reqId) evt.cookies.set("rid", String(reqId));
+	.handle(async ({ query, headers, res, cookies }) => {
+		const reqId = headers["x-request-id"] ?? undefined;
+		if (reqId) cookies.set("rid", String(reqId));
 
 		if (query.format === "redirect") {
 			return res.redirect(query.redirectTo ?? "/", 303);
@@ -123,24 +121,16 @@ export const GET = route()
 		}
 
 		if (query.format === "html") {
-			return new Response(
+			return res.html(
 				`<html><body><h1>Full Demo</h1><p>reqId=${reqId ?? "-"}</p></body></html>`,
-				{
-					status: 200,
-					headers: {
-						"Content-Type": "text/html",
-						"x-request-id": String(reqId ?? "-"),
-					},
-				},
+				{ headers: { "x-request-id": String(reqId ?? "-") } },
 			);
 		}
 		if (query.format === "stream") {
-			return jsxStream(async () => {
-				const chunks: string[] = [];
-				chunks.push("<html><body><h1>Streaming</h1>");
-				for (let i = 1; i <= 5; i++) chunks.push(`<p>chunk ${i}</p>`);
-				chunks.push("</body></html>");
-				return chunks.join("");
+			return res.stream(async (write) => {
+				write("<html><body><h1>Streaming</h1>");
+				for (let i = 1; i <= 5; i++) write(`<p>chunk ${i}</p>`);
+				write("</body></html>");
 			});
 		}
 		if (query.format === "file") {
@@ -161,7 +151,7 @@ export const GET = route()
 		);
 		const items = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-		evt.cookies.set("lastVisit", new Date().toISOString());
+		cookies.set("lastVisit", new Date().toISOString());
 
 		if (query.pending) {
 			return res(202, { message: "Processing" });
