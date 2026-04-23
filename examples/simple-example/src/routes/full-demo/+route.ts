@@ -1,6 +1,5 @@
-import { error, getRequestEvent, handle, jsxStream } from "@ts-api-kit/core";
-import { type ApiError, headers, response } from "@ts-api-kit/core/openapi";
-import * as v from "valibot";
+import { getRequestEvent, jsxStream, q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
 // Domain models used across responses
 type Role = "admin" | "editor" | "viewer";
@@ -30,168 +29,129 @@ interface ListResponse<T> {
 	meta?: Meta;
 }
 
+type ApiError = { code: string; message: string; details?: unknown };
+
 // In-memory store just for demo purposes
 const USERS: User[] = [];
 
-// Common header helpers for OpenAPI response typing
-const rateLimitHeaders = headers.of<{
-	"x-ratelimit-limit": number;
-	"x-ratelimit-remaining": number;
-	"x-ratelimit-reset": number; // epoch seconds
-}>();
+const RATE_LIMIT_HEADERS = {
+	"x-ratelimit-limit": z.string(),
+	"x-ratelimit-remaining": z.string(),
+	"x-ratelimit-reset": z.string(),
+};
 
-/**
- * @summary Full demo - GET
- * @description
- * Demonstrates validation of query and headers, cookies, different formats
- * of response (JSON/HTML/stream/file), redirection, rate limiting,
- * and automatic mapping to OpenAPI.
- * @tags demo advanced
- * @security [{"bearerAuth":[]}]
- * @externalDocs {"url":"https://github.com/ts-api-kit/ts-api-kit","description":"TS API Kit project"}
- * @operationId fullDemoGet
- */
-export const GET = handle(
-	{
-		openapi: {
-			request: {
-				/**
-				 * @description Search and pagination parameters
-				 */
-				query: v.object({
-					/** @description Current page @example 1 */
-					page: v.optional(v.pipe(v.string(), v.transform(Number))),
-					/** @description Items per page @example 20 */
-					pageSize: v.optional(v.pipe(v.string(), v.transform(Number))),
-					/** @description Search text @example "john" */
-					search: v.optional(v.string()),
-					/**
-					 * @description Output format
-					 * @example "json"
-					 */
-					format: v.optional(
-						v.union([
-							v.literal("json"),
-							v.literal("html"),
-							v.literal("stream"),
-							v.literal("file"),
-							v.literal("redirect"),
-						]),
-					),
-					/** @description If true, returns 202 (processing) @example false */
-					pending: v.optional(
-						v.pipe(
-							v.string(),
-							v.transform((s) => s === "true"),
-						),
-					),
-					/** @description Simulate 403 error @example false */
-					forbidden: v.optional(
-						v.pipe(
-							v.string(),
-							v.transform((s) => s === "true"),
-						),
-					),
-					/** @description Simulate rate limit (429) @example false */
-					throttle: v.optional(
-						v.pipe(
-							v.string(),
-							v.transform((s) => s === "true"),
-						),
-					),
-					/** @description URL to redirect to when format=redirect @example "/" */
-					redirectTo: v.optional(v.string()),
-				}),
-				/**
-				 * @description Accepted headers
-				 */
-				headers: v.object({
-					/** @description Request ID (trace) @example "req-123" */
-					"x-request-id": v.optional(v.string()),
-					/** @description Preferred language @example "pt-BR" */
-					"accept-language": v.optional(v.string()),
-				}),
-			},
-			responses: {
-				200: response.of<ListResponse<User>>({
-					description: "OK",
-					headers: headers.of<{ "x-request-id": string }>(),
-				}),
-				201: response.of<{ message: string }>(),
-				202: response.of<{ message: string }>(),
-				204: response.of<void>({ description: "Sem conteúdo" }),
-				303: response.of<void>({ description: "Redirecionamento" }),
-				400: response.of<{ error: ApiError }>({
-					description: "Erro de validação",
-				}),
-				401: response.of<{ error: ApiError }>(),
-				403: response.of<{ error: ApiError }>(),
-				404: response.of<{ error: ApiError }>(),
-				409: response.of<{ error: ApiError }>(),
-				422: response.of<{ error: ApiError }>(),
-				429: response.of<{ error: ApiError }>({ headers: rateLimitHeaders }),
-				500: response.of<{ error: ApiError }>(),
-			},
-		},
-	},
-	async ({ query, headers, response }) => {
-		// Cookies and request context
+// ──────────────────────────────────────────────────────────────
+// GET — list with filters, multi-format output, rate limiting, errors
+// ──────────────────────────────────────────────────────────────
+export const GET = route()
+	.query(
+		z.object({
+			page: q.int({ min: 1 }).optional(),
+			pageSize: q.int({ min: 1, max: 200 }).optional(),
+			search: q.str().optional(),
+			format: q.enum(["json", "html", "stream", "file", "redirect"]).optional(),
+			pending: q.bool().optional(),
+			forbidden: q.bool().optional(),
+			throttle: q.bool().optional(),
+			redirectTo: q.str().optional(),
+		}),
+	)
+	.headers(
+		z.object({
+			"x-request-id": q.str().optional(),
+			"accept-language": q.str().optional(),
+		}),
+	)
+	.returns({
+		200: q.type<ListResponse<User>>({
+			description: "OK",
+			headers: { "x-request-id": z.string() },
+		}),
+		201: q.type<{ message: string }>(),
+		202: q.type<{ message: string }>(),
+		204: q.type<void>({ description: "No content" }),
+		303: q.type<void>({ description: "Redirect" }),
+		400: q.type<ApiError>({ description: "Validation error" }),
+		401: q.type<ApiError>(),
+		403: q.type<ApiError>(),
+		404: q.type<ApiError>(),
+		409: q.type<ApiError>(),
+		422: q.type<ApiError>(),
+		429: q.type<ApiError>({ headers: RATE_LIMIT_HEADERS }),
+		500: q.type<ApiError>(),
+	})
+	.summary("Full demo — GET")
+	.description(
+		"Query + header validation, cookies, multiple response formats (JSON/HTML/stream/file), redirect, rate limiting, and OpenAPI docs in one route.",
+	)
+	.tags("demo", "advanced")
+	.security({ bearerAuth: [] })
+	.operationId("fullDemoGet")
+	.externalDocs(
+		"https://github.com/ts-api-kit/ts-api-kit",
+		"TS API Kit project",
+	)
+	.handle(async ({ query, headers, res }) => {
 		const evt = getRequestEvent();
-		const reqId = headers["x-request-id"] || evt.headers?.["x-request-id"]; // validated or raw
+		const reqId =
+			headers["x-request-id"] ?? evt.headers?.["x-request-id"] ?? undefined;
 		if (reqId) evt.cookies.set("rid", String(reqId));
 
-		// Explicit redirect
 		if (query.format === "redirect") {
-			return response.redirect(query.redirectTo ?? "/", 303);
+			return res.redirect(query.redirectTo ?? "/", 303);
 		}
 
-		// Simulate common errors
 		if (query.forbidden) {
-			// Throw typed error -> 403
-			error(403, "Acesso negado", { reason: "demo" });
-		}
-		if (query.throttle) {
-			return response.tooManyRequests("Rate limit exceeded", {
-				headers: {
-					"x-ratelimit-limit": "100",
-					"x-ratelimit-remaining": "0",
-					"x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 30),
-				},
+			return res(403, {
+				code: "forbidden",
+				message: "Access denied",
+				details: { reason: "demo" },
 			});
 		}
+		if (query.throttle) {
+			return res(
+				429,
+				{ code: "rate_limited", message: "Rate limit exceeded" },
+				{
+					headers: {
+						"x-ratelimit-limit": "100",
+						"x-ratelimit-remaining": "0",
+						"x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 30),
+					},
+				},
+			);
+		}
 
-		// Different output formats
 		if (query.format === "html") {
-			return response.html(
-				`<html><body><h1>Full Demo</h1><p>reqId=${
-					reqId ?? "-"
-				}</p></body></html>`,
-				{ headers: { "x-request-id": String(reqId ?? "-") } },
+			return new Response(
+				`<html><body><h1>Full Demo</h1><p>reqId=${reqId ?? "-"}</p></body></html>`,
+				{
+					status: 200,
+					headers: {
+						"Content-Type": "text/html",
+						"x-request-id": String(reqId ?? "-"),
+					},
+				},
 			);
 		}
 		if (query.format === "stream") {
 			return jsxStream(async () => {
 				const chunks: string[] = [];
 				chunks.push("<html><body><h1>Streaming</h1>");
-				for (let i = 1; i <= 5; i++) {
-					chunks.push(`<p>chunk ${i}</p>`);
-				}
+				for (let i = 1; i <= 5; i++) chunks.push(`<p>chunk ${i}</p>`);
 				chunks.push("</body></html>");
 				return chunks.join("");
 			});
 		}
 		if (query.format === "file") {
-			const content = ["id,name,email", "1,John,john@example.com"].join("\n");
-			const data = new TextEncoder().encode(content);
-			return response.file(data, "demo.csv", {
-				headers: {
-					"Content-Type": "text/csv",
-					"x-request-id": String(reqId ?? "-"),
-				},
+			const csv = ["id,name,email", "1,John,john@example.com"].join("\n");
+			const data = new TextEncoder().encode(csv);
+			return res.file(data, "demo.csv", {
+				contentType: "text/csv",
+				headers: { "x-request-id": String(reqId ?? "-") },
 			});
 		}
 
-		// JSON default
 		const page = query.page ?? 1;
 		const pageSize = query.pageSize ?? 10;
 		const filtered = USERS.filter((u) =>
@@ -201,15 +161,14 @@ export const GET = handle(
 		);
 		const items = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-		// Visit cookie
 		evt.cookies.set("lastVisit", new Date().toISOString());
 
-		// Optional 202 Accepted
 		if (query.pending) {
-			return response.accepted({ message: "Processando" });
+			return res(202, { message: "Processing" });
 		}
 
-		return response.ok(
+		return res(
+			200,
 			{
 				items,
 				page,
@@ -226,234 +185,178 @@ export const GET = handle(
 			},
 			{ headers: { "x-request-id": String(reqId ?? "-") } },
 		);
-	},
-);
+	});
 
-/**
- * @summary Full demo - POST (create)
- * @description Creates a user with body/header validation and OpenAPI examples.
- * @tags demo advanced users
- * @security [{"bearerAuth":[]}]
- * @operationId fullDemoCreate
- */
-export const POST = handle(
-	{
-		openapi: {
-			request: {
-				/** @description Required headers */
-				headers: v.object({
-					/** @description Bearer token @example "Bearer <jwt>" */
-					authorization: v.string(),
-				}),
-				/**
-				 * @description Request body
-				 **/
-				body: v.object({
-					/**
-					 * @description Name
-					 * @example "John Doe"
-					 **/
-					name: v.string(),
-					/** @description Email @example "john.doe@example.com" */
-					email: v.string(),
-					/** @description User roles @example ["viewer"] */
-					roles: v.optional(
-						v.array(
-							v.union([
-								v.literal("admin"),
-								v.literal("editor"),
-								v.literal("viewer"),
-							]),
-						),
-					),
-					profile: v.optional(
-						v.object({
-							/** @description Short bio @example "About me" */
-							bio: v.optional(v.string()),
-							/** @description Website @example "https://example.com" */
-							website: v.optional(v.string()),
-						}),
-					),
-				}),
-				mediaType: "application/json",
-				examples: {
-					name: "Ada Lovelace",
-					email: "ada@example.com",
-					roles: ["admin"],
-				},
-			},
-			responses: {
-				201: response.of<User>({
-					description: "Created",
-					headers: headers.of<{ Location: string }>(),
-				}),
-				400: response.of<{ error: ApiError }>(),
-				401: response.of<{ error: ApiError }>(),
-				409: response.of<{ error: ApiError }>(),
-				422: response.of<{ error: ApiError }>(),
-				500: response.of<{ error: ApiError }>(),
-			},
-		},
-	},
-	async ({ body, headers, response }) => {
-		if (!headers.authorization?.toLowerCase().startsWith("bearer ")) {
-			return response.unauthorized("Missing bearer token");
+// ──────────────────────────────────────────────────────────────
+// POST — create a user
+// ──────────────────────────────────────────────────────────────
+export const POST = route()
+	.headers(z.object({ authorization: z.string() }))
+	.body(
+		z.object({
+			name: z.string(),
+			email: z.string(),
+			roles: z.array(z.enum(["admin", "editor", "viewer"])).optional(),
+			profile: z
+				.object({
+					bio: z.string().optional(),
+					website: z.string().optional(),
+				})
+				.optional(),
+		}),
+	)
+	.returns({
+		201: q.type<User>({
+			description: "Created",
+			headers: { Location: z.string() },
+		}),
+		400: q.type<ApiError>(),
+		401: q.type<ApiError>(),
+		409: q.type<ApiError>(),
+		422: q.type<ApiError>(),
+		500: q.type<ApiError>(),
+	})
+	.summary("Full demo — POST (create)")
+	.description("Creates a user with body/header validation and examples.")
+	.tags("demo", "advanced", "users")
+	.security({ bearerAuth: [] })
+	.operationId("fullDemoCreate")
+	.handle(async ({ body, headers, res }) => {
+		if (!headers.authorization.toLowerCase().startsWith("bearer ")) {
+			return res(401, {
+				code: "unauthorized",
+				message: "Missing bearer token",
+			});
 		}
 
-		const newUser: User = {
+		const user: User = {
 			id: crypto.randomUUID(),
-			name: body.name as string,
-			email: body.email as string,
+			name: body.name,
+			email: body.email,
 			roles: (body.roles as Role[] | undefined) ?? ["viewer"],
 			profile: body.profile as Profile | undefined,
 		};
-		USERS.push(newUser);
+		USERS.push(user);
 
-		return response.created(newUser, {
+		return res(201, user, {
 			headers: {
-				Location: `/full-demo?search=${encodeURIComponent(newUser.email)}`,
+				Location: `/full-demo?search=${encodeURIComponent(user.email)}`,
 			},
 		});
-	},
-);
+	});
 
-/**
- * @summary Full demo - PUT (replace)
- * @description Updates user data.
- * @tags demo users
- * @operationId fullDemoUpdate
- */
-export const PUT = handle(
-	{
-		openapi: {
-			request: {
-				body: v.object({
-					/** @description User ID @example "uuid" */
-					id: v.string(),
-					/** @description Name @example "Jane Doe" */
-					name: v.string(),
-					/** @description Email @example "jane.doe@example.com" */
-					email: v.string(),
-				}),
-			},
-			responses: {
-				200: response.of<User>({ description: "Updated" }),
-				202: response.of<{ message: string }>(),
-				404: response.of<{ error: ApiError }>(),
-				422: response.of<{ error: ApiError }>(),
-			},
-		},
-	},
-	async ({ body, response }) => {
+// ──────────────────────────────────────────────────────────────
+// PUT — replace a user
+// ──────────────────────────────────────────────────────────────
+export const PUT = route()
+	.body(
+		z.object({
+			id: z.string(),
+			name: z.string(),
+			email: z.string(),
+		}),
+	)
+	.returns({
+		200: q.type<User>({ description: "Updated" }),
+		202: q.type<{ message: string }>(),
+		404: q.type<ApiError>(),
+		422: q.type<ApiError>(),
+	})
+	.summary("Full demo — PUT (replace)")
+	.tags("demo", "users")
+	.operationId("fullDemoUpdate")
+	.handle(async ({ body, res }) => {
 		const idx = USERS.findIndex((u) => u.id === body.id);
-		if (idx < 0) return response.notFound("User not found");
+		if (idx < 0)
+			return res(404, { code: "not_found", message: "User not found" });
 		const updated: User = {
 			...USERS[idx],
-			name: body.name as string,
-			email: body.email as string,
+			name: body.name,
+			email: body.email,
 		};
 		USERS[idx] = updated;
-		return response.ok(updated);
-	},
-);
+		return res(200, updated);
+	});
 
-/**
- * @summary Full demo - PATCH (partial)
- * @description Partial user update.
- * @tags demo users
- * @operationId fullDemoPatch
- */
-export const PATCH = handle(
-	{
-		openapi: {
-			request: {
-				body: v.object({
-					/** @description User ID */
-					id: v.string(),
-					/** @description Name */
-					name: v.optional(v.string()),
-					/** @description Email */
-					email: v.optional(v.string()),
-				}),
-			},
-			responses: {
-				200: response.of<User>(),
-				404: response.of<{ error: ApiError }>(),
-				422: response.of<{ error: ApiError }>(),
-			},
-		},
-	},
-	async ({ body, response }) => {
-		const user = USERS.find((u) => u.id === body.id);
-		if (!user) return response.notFound("User not found");
-		if (typeof body.name === "string") user.name = body.name;
-		if (typeof body.email === "string") user.email = body.email;
-		return response.ok(user);
-	},
-);
-
-/**
- * @summary Full demo - DELETE
- * @description Removes a user via querystring.
- * @tags demo users
- * @operationId fullDemoDelete
- */
-export const DELETE = handle(
-	{
-		openapi: {
-			request: {
-				query: v.object({
-					/** @description User ID */
-					id: v.string(),
-				}),
-			},
-			responses: {
-				204: response.of<void>({ description: "Deleted" }),
-				404: response.of<{ error: ApiError }>(),
-			},
-		},
-	},
-	async ({ query, response }) => {
-		const idx = USERS.findIndex((u) => u.id === query.id);
-		if (idx < 0) return response.notFound("User not found");
-		USERS.splice(idx, 1);
-		return response.noContent({ headers: { "x-deleted": "true" } });
-	},
-);
-
-/**
- * @summary Full demo - OPTIONS
- * @description Exposes supported methods via plain text.
- * @tags demo
- * @operationId fullDemoOptions
- */
-export const OPTIONS = handle(
-	{
-		openapi: {
-			responses: {
-				200: response.of<string>({ contentType: "text/plain" }),
-			},
-		},
-	},
-	({ response }) =>
-		response.text("GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD", {
-			headers: { Allow: "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD" },
+// ──────────────────────────────────────────────────────────────
+// PATCH — partial update
+// ──────────────────────────────────────────────────────────────
+export const PATCH = route()
+	.body(
+		z.object({
+			id: z.string(),
+			name: z.string().optional(),
+			email: z.string().optional(),
 		}),
-);
+	)
+	.returns({
+		200: q.type<User>(),
+		404: q.type<ApiError>(),
+		422: q.type<ApiError>(),
+	})
+	.summary("Full demo — PATCH")
+	.tags("demo", "users")
+	.operationId("fullDemoPatch")
+	.handle(async ({ body, res }) => {
+		const user = USERS.find((u) => u.id === body.id);
+		if (!user)
+			return res(404, { code: "not_found", message: "User not found" });
+		if (body.name) user.name = body.name;
+		if (body.email) user.email = body.email;
+		return res(200, user);
+	});
 
-/**
- * @summary Full demo - HEAD
- * @description Bodyless response with control headers.
- * @tags demo
- * @operationId fullDemoHead
- */
-export const HEAD = handle(
-	{
-		openapi: {
-			responses: {
-				204: response.of<void>(),
-			},
-		},
-	},
-	({ response }) => response.noContent({ headers: { "x-demo": "true" } }),
-);
+// ──────────────────────────────────────────────────────────────
+// DELETE — remove via querystring
+// ──────────────────────────────────────────────────────────────
+export const DELETE = route()
+	.query(z.object({ id: q.str() }))
+	.returns({
+		204: q.type<void>({ description: "Deleted" }),
+		404: q.type<ApiError>(),
+	})
+	.summary("Full demo — DELETE")
+	.tags("demo", "users")
+	.operationId("fullDemoDelete")
+	.handle(async ({ query, res }) => {
+		const idx = USERS.findIndex((u) => u.id === query.id);
+		if (idx < 0)
+			return res(404, { code: "not_found", message: "User not found" });
+		USERS.splice(idx, 1);
+		return new Response(null, {
+			status: 204,
+			headers: { "x-deleted": "true" },
+		});
+	});
+
+// ──────────────────────────────────────────────────────────────
+// OPTIONS — advertise supported methods as text
+// ──────────────────────────────────────────────────────────────
+export const OPTIONS = route()
+	.returns({ 200: q.type<string>({ contentType: "text/plain" }) })
+	.summary("Full demo — OPTIONS")
+	.tags("demo")
+	.operationId("fullDemoOptions")
+	.handle(
+		async () =>
+			new Response("GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD", {
+				status: 200,
+				headers: {
+					Allow: "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD",
+					"Content-Type": "text/plain",
+				},
+			}),
+	);
+
+// ──────────────────────────────────────────────────────────────
+// HEAD — empty response with control headers
+// ──────────────────────────────────────────────────────────────
+export const HEAD = route()
+	.returns({ 204: q.type<void>() })
+	.summary("Full demo — HEAD")
+	.tags("demo")
+	.operationId("fullDemoHead")
+	.handle(
+		async () =>
+			new Response(null, { status: 204, headers: { "x-demo": "true" } }),
+	);

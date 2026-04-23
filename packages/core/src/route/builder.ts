@@ -282,7 +282,7 @@ class RouteBuilderImpl<S extends Spec> {
 		// Wrap the user's fn so it sees our richer `res` instead of the legacy
 		// ResponseTools bag. The legacy `response` tools remain accessible on
 		// the wrapped context for the few helpers we delegate to (e.g. file).
-		return createHandler(legacySpec, async (legacyCtx) => {
+		const h = createHandler(legacySpec, async (legacyCtx) => {
 			const res = buildResFn(
 				(legacyCtx as unknown as { response: ResponseTools<LegacyRouteSpec> })
 					.response,
@@ -296,6 +296,17 @@ class RouteBuilderImpl<S extends Spec> {
 			} as unknown as RouteHandlerContext<S>;
 			return fn(ctx);
 		});
+
+		// The file-router reads `handler.__routeConfig.openapi` at mount
+		// time to register OpenAPI metadata *before* any request has
+		// fired. Without this, the runtime `/openapi.json` handler only
+		// sees the lazy registration that fires after the route's first
+		// invocation — and a test that just hits `/openapi.json` without
+		// warming the route up first would see empty metadata. Attach it
+		// the same way the legacy `handle()` does.
+		(h as unknown as { __routeConfig: LegacyRouteSpec }).__routeConfig =
+			legacySpec;
+		return h;
 	}
 }
 

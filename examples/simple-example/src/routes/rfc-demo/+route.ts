@@ -58,7 +58,7 @@ export const POST = route()
 	.body(
 		z.object({
 			name: z.string().min(1),
-			email: z.string().email(),
+			email: z.email(),
 			roles: z.array(z.enum(["admin", "editor", "viewer"])).optional(),
 		}),
 	)

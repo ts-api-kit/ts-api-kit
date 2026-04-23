@@ -1,32 +1,16 @@
-import { handle, response,getRequestEvent } from "@ts-api-kit/core";
-import * as v from "valibot";
+import { getRequestEvent, q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
 interface HelloWorldResponse {
-  hello: string;
+	hello: string;
 }
 
-export const GET = handle(
-  {
-    openapi: {
-      request: {
-        query: v.object({
-          name: v.optional(v.string()),
-        }),
-      },
-      responses: {
-        200: response.of<HelloWorldResponse>(),
-      },
-    },
-  },
-  async ({ response, query }) => {
-
-    const {env} = getRequestEvent();
-
-    await env.TEST_DB.prepare("SELECT * FROM users").bind({}).all();
-
-
-    return response.ok({
-      hello: `Hello ${query.name ?? "World"}`,
-    });
-  }
-);
+export const GET = route()
+	.query(z.object({ name: q.str().optional() }))
+	.returns<HelloWorldResponse>()
+	.summary("Hello world")
+	.handle(async ({ query, res }) => {
+		const { env } = getRequestEvent();
+		await env.TEST_DB.prepare("SELECT * FROM users").bind({}).all();
+		return res({ hello: `Hello ${query.name ?? "World"}` });
+	});
