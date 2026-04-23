@@ -24,7 +24,11 @@ import { readRouteJSDocForExport } from "./utils/jsdoc-extractor.ts";
 import { createLogger, type Logger, setLogLevel } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
-import { toArray } from "./utils.ts";
+
+function toArray<T>(x: T | T[] | undefined): T[] {
+	if (!x) return [];
+	return Array.isArray(x) ? x : [x];
+}
 
 function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
 	for (const n of names) {

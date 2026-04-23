@@ -38,26 +38,17 @@ Create route files in `src/routes/`:
 
 ```ts
 // src/routes/+route.ts
-import { handle, response } from "@ts-api-kit/core";
-import * as v from "valibot";
+import { q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
-export const GET = handle(
-  {
-    openapi: {
-      request: {
-        query: v.object({
-          id: v.pipe(v.string(), v.transform(Number), v.number()),
-        }),
-      },
-      responses: {
-        200: response.of<YourResponseType>(),
-      },
-    },
-  },
-  async ({ response }) => {
-    return response.ok({ /* your data */ });
-  }
-);
+type YourResponseType = { id: number; name: string };
+
+export const GET = route()
+  .query(z.object({ id: q.int() }))
+  .returns<YourResponseType>()
+  .handle(async ({ query, res }) => {
+    return res({ id: query.id, name: "..." });
+  });
 ```
 
 ### 2. Generate Route Mappings
@@ -99,4 +90,4 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 - **Development**: Uses Wrangler's local development server
 - **Production**: Deployed to Cloudflare Workers edge network
 - **Routing**: Static imports only (no file-based routing)
-- **OpenAPI**: Can use `handle()` and type-safe responses, but OpenAPI generation must happen during build time, not runtime
+- **OpenAPI**: The `route()` builder captures schemas + response markers. OpenAPI generation runs at build time; mount the generated doc statically in your Worker.
