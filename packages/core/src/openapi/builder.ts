@@ -651,11 +651,15 @@ export class OpenAPIBuilder {
 function isValibot(
 	s: unknown,
 ): s is v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>> {
-	return (
-		!!s &&
-		typeof s === "object" &&
-		typeof (s as { type?: unknown }).type === "string"
-	);
+	if (!s || typeof s !== "object") return false;
+	if (typeof (s as { type?: unknown }).type !== "string") return false;
+	// Zod v4 schemas ALSO expose a `.type` string, so we'd dispatch them to
+	// the valibot path and silently emit empty OpenAPI parameters. Use the
+	// Standard Schema vendor tag to decide: valibot tags itself, zod tags
+	// itself, anything else falls through as "not valibot".
+	const vendor = (s as { "~standard"?: { vendor?: unknown } })["~standard"]
+		?.vendor;
+	return vendor === "valibot";
 }
 
 function toOperationId(method: string, path: string) {
