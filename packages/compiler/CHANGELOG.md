@@ -1,5 +1,12 @@
 # @ts-api-kit/compiler
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies [[`9418371`](https://github.com/ts-api-kit/ts-api-kit/commit/94183718e543cd0e5ffb3bb3fe2a83573d81430e)]:
+  - @ts-api-kit/core@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes
