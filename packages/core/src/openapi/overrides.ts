@@ -25,7 +25,14 @@ export type RootOverrides = Partial<{
 let ROOT_OVERRIDES: RootOverrides | undefined;
 let DEFAULT_OVERRIDES: RootOverrides | undefined;
 type OpenAPIMode = "file" | "memory" | "none";
-let OPENAPI_MODE: OpenAPIMode = "memory";
+// Default to "none" so the runtime `/openapi.json` handler uses the
+// in-memory builder (driven by handler registrations) instead of the
+// AST-based compiler. The compiler path only understands valibot
+// patterns, so defaulting to "memory" silently produced empty
+// parameters for zod routes. Users who want the compiler's richer
+// response-type extraction can opt in with
+// `serve({ openapiOutput: "memory" })`.
+let OPENAPI_MODE: OpenAPIMode = "none";
 let OPENAPI_FILE_PATH: string = "./openapi.json";
 let OPENAPI_PROJECT_PATH: string = "./tsconfig.json";
 

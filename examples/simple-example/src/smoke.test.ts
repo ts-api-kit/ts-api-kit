@@ -38,7 +38,7 @@ describe("simple-example smoke", () => {
 		assert.equal(res.status, 400);
 	});
 
-	it("exposes the generated /openapi.json", async () => {
+	it("exposes the generated /openapi.json with zod query parameters populated", async () => {
 		const server = new Server();
 		await server.configureRoutes(routesDir);
 
@@ -49,12 +49,36 @@ describe("simple-example smoke", () => {
 
 		const doc = (await res.json()) as {
 			openapi?: string;
-			paths?: Record<string, unknown>;
+			paths?: Record<
+				string,
+				Record<
+					string,
+					{
+						parameters?: Array<{
+							name?: string;
+							in?: string;
+							schema?: { type?: string };
+						}>;
+					}
+				>
+			>;
 		};
 		assert.ok(
 			typeof doc.openapi === "string" && doc.openapi.startsWith("3."),
 			"expected an openapi 3.x document",
 		);
 		assert.ok(doc.paths, "expected paths to be present in the document");
+
+		// Regression guard: the root route declares a zod `id: z.number()`
+		// query schema. Before the openapi default-mode fix (0.4.2) the
+		// compiler pipeline (default) only understood valibot, so zod
+		// routes serialised with an empty parameters array. Assert the
+		// parameter is now emitted with the right shape.
+		const rootGet = doc.paths?.["/"]?.get;
+		assert.ok(rootGet, "expected GET / in the document");
+		const idParam = rootGet.parameters?.find((p) => p.name === "id");
+		assert.ok(idParam, "expected `id` query parameter to be emitted");
+		assert.equal(idParam.in, "query");
+		assert.equal(idParam.schema?.type, "number");
 	});
 });

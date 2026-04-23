@@ -82,11 +82,15 @@ export const serve = async (options: ServeOptions = {}): Promise<void> => {
 
 	await server.configureRoutes(routesDir);
 
-	// Decide generation mode and file path
+	// Decide generation mode and file path. Default is "none" so the
+	// runtime `/openapi.json` is served from the in-memory builder, which
+	// supports both valibot and zod. Opt into "memory" for the AST-based
+	// compiler pipeline when richer response-type extraction is wanted
+	// (valibot-only today).
 	const outOpt =
 		typeof options.openapiOutput === "string"
 			? { mode: options.openapiOutput }
-			: (options.openapiOutput ?? { mode: "memory" });
+			: (options.openapiOutput ?? { mode: "none" });
 	const mode = (outOpt.mode ?? "none") as "file" | "memory" | "none";
 	const outPath = outOpt.path || "./openapi.json";
 	setOpenAPIGeneration({
