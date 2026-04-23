@@ -361,6 +361,13 @@ function defaultResponseDescription(code: string): string {
 	return RESPONSE_DESCRIPTIONS[code.charAt(0)] ?? "Response";
 }
 
+/** Statuses that must not carry a response body (RFC 9110 §15). */
+const NO_BODY_STATUSES = new Set<number>([204, 205, 304]);
+function isNoBodyStatus(status: number): boolean {
+	if (!Number.isFinite(status)) return false;
+	return NO_BODY_STATUSES.has(status) || (status >= 100 && status < 200);
+}
+
 /**
  * Route-level Valibot schemas per segment.
  */
@@ -665,18 +672,21 @@ export class OpenAPIBuilder {
 
 		const responses: ResponsesObject = {};
 		for (const [code, res] of Object.entries(op.responses ?? {})) {
-			responses[code] = {
+			const entry: ResponseObject = {
 				// OpenAPI 3.1 requires `description` on every response.
 				// Fall back to the status-code category so the doc validates.
 				description: res.description ?? defaultResponseDescription(code),
 				headers: buildResponseHeaders(res.headers),
-				content: {
+			};
+			if (!isNoBodyStatus(Number(code))) {
+				entry.content = {
 					[res.contentType ?? "application/json"]: {
 						schema: {}, // Empty schema for response markers - typing only
 						example: res.examples,
 					},
-				},
-			};
+				};
+			}
+			responses[code] = entry;
 		}
 
 		// Only include responses that are explicitly defined in the route

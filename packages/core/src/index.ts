@@ -24,13 +24,35 @@
 // the validation pipeline) is internal; users never import from
 // those modules directly.
 
-export * from "./config.ts";
+export { type DirConfig, defineConfig } from "./config.ts";
 export { mountFileRouter } from "./file-router.ts";
-export * from "./hooks.ts";
 export { defineMiddleware } from "./middleware.ts";
 export { OpenAPIError } from "./openapi/errors.ts";
-export * from "./openapi/presets.ts";
-export * from "./route/index.ts";
+export {
+	ErrorSchema,
+	IdParam,
+	PaginationQuery,
+	TracingHeaders,
+} from "./openapi/presets.ts";
+export {
+	type CookieOptions,
+	type Cookies,
+	type Env,
+	type JsxBody,
+	type LayoutComponent,
+	q,
+	type RedirectStatus,
+	type ResInit,
+	type ResolvedEnv,
+	type ResRuntime,
+	type RouteBuilder,
+	type RouteHandlerContext,
+	route,
+	type StreamCallback,
+	type TextLikeBody,
+	type TypeMarker,
+	type TypeMeta,
+} from "./route/index.ts";
 export { default as Server } from "./server.ts";
 
 import {

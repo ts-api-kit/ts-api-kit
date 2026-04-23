@@ -313,10 +313,7 @@ export const DELETE = route()
 		if (idx < 0)
 			return res(404, { code: "not_found", message: "User not found" });
 		USERS.splice(idx, 1);
-		return new Response(null, {
-			status: 204,
-			headers: { "x-deleted": "true" },
-		});
+		return res(204, undefined, { headers: { "x-deleted": "true" } });
 	});
 
 // ──────────────────────────────────────────────────────────────

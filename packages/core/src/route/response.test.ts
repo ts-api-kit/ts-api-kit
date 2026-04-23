@@ -88,4 +88,28 @@ describe("buildRes", () => {
 		assert.equal(out.headers.get("content-type"), "text/html; charset=utf-8");
 		assert.equal(await out.text(), "<section>Home</section>");
 	});
+
+	it("`res(204, undefined)` emits an empty body without a Content-Type", async () => {
+		const res = buildRes();
+		const out = res(204, undefined, { headers: { "x-deleted": "true" } });
+		assert.equal(out.status, 204);
+		assert.equal(out.headers.get("content-type"), null);
+		assert.equal(out.headers.get("x-deleted"), "true");
+		assert.equal(await out.text(), "");
+	});
+
+	it("`res(304, undefined)` emits an empty body without a Content-Type", async () => {
+		const res = buildRes();
+		const out = res(304, undefined);
+		assert.equal(out.status, 304);
+		assert.equal(out.headers.get("content-type"), null);
+		assert.equal(await out.text(), "");
+	});
+
+	it("`res(200, undefined)` also emits an empty body (no JSON 'undefined' string)", async () => {
+		const res = buildRes();
+		const out = res(200, undefined);
+		assert.equal(out.status, 200);
+		assert.equal(await out.text(), "");
+	});
 });

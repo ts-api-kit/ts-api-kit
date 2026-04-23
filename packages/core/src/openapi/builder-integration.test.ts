@@ -158,4 +158,28 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 		const response = b.toJSON().paths["/custom"].get.responses["404"];
 		assert.equal(response.description, "User not found");
 	});
+
+	it("omits `content` for 204, 205, 304, and 1xx responses (no-body statuses)", () => {
+		const b = freshBuilder();
+		b.addOperation({
+			method: "delete",
+			path: "/items",
+			summary: "",
+			responses: {
+				101: q.type<void>(),
+				204: q.type<void>(),
+				205: q.type<void>(),
+				304: q.type<void>(),
+				// Sanity: 200 still has content.
+				200: q.type<{ ok: true }>(),
+			},
+		});
+
+		const { responses } = b.toJSON().paths["/items"].delete;
+		assert.equal(responses["101"].content, undefined);
+		assert.equal(responses["204"].content, undefined);
+		assert.equal(responses["205"].content, undefined);
+		assert.equal(responses["304"].content, undefined);
+		assert.ok(responses["200"].content, "200 should still have content");
+	});
 });

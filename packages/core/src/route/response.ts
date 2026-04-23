@@ -38,7 +38,24 @@ type JsonValue =
 // Internal implementation. Each helper returns a `Response`.
 // ──────────────────────────────────────────────────────────────
 
+/**
+ * HTTP statuses that MUST NOT carry a response body. `res(204)` etc.
+ * skip serialization and the `Content-Type` header for these.
+ */
+const NO_BODY_STATUSES = new Set<number>([204, 205, 304]);
+
+function isNoBodyStatus(status: number): boolean {
+	// 1xx responses also forbid a body.
+	return NO_BODY_STATUSES.has(status) || (status >= 100 && status < 200);
+}
+
 function jsonResponse(status: number, body: unknown, init: ResInit): Response {
+	if (isNoBodyStatus(status) || body === undefined) {
+		// No body: skip Content-Type unless the caller explicitly set one.
+		const headers: Record<string, string> = { ...(init.headers ?? {}) };
+		if (init.contentType) headers["Content-Type"] = init.contentType;
+		return new Response(null, { status, headers });
+	}
 	return new Response(JSON.stringify(body as JsonValue), {
 		status,
 		headers: {
