@@ -8,7 +8,7 @@
 
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { Handler } from "hono";
-import type { ZodTypeAny, z } from "zod";
+import type { z } from "zod";
 import { lazyRegister } from "../openapi/registry.ts";
 import type { Cookies, LayoutComponent, ResolvedEnv } from "./context.ts";
 import {
@@ -318,7 +318,7 @@ export function route(): RouteBuilder<EmptySpec> {
 }
 
 /** Handler type used internally to register the route with the runtime. */
-export type RouteHandler<S extends Spec = Spec> = Handler & {
+export type RouteHandler = Handler & {
 	__routeConfig?: unknown;
 };
 
