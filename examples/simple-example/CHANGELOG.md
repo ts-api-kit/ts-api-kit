@@ -1,5 +1,13 @@
 # simple-example
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`5cf67f3`](https://github.com/ts-api-kit/ts-api-kit/commit/5cf67f32dfd705cea4d5dff1ad35ce8b7e196167)]:
+  - @ts-api-kit/core@0.4.1
+  - @ts-api-kit/compiler@0.4.1
+
 ## 1.0.2
 
 ### Patch Changes
