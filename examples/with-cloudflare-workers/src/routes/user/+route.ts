@@ -1,5 +1,5 @@
-import { handle, response } from "@ts-api-kit/core";
-import * as v from "valibot";
+import { q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
 interface User {
 	id: number;
@@ -12,27 +12,18 @@ interface HelloWorldResponse {
 	user: User;
 }
 
-export const GET = handle(
-	{
-		openapi: {
-			request: {
-				query: v.object({
-				  id: v.pipe(v.string(), v.transform(Number), v.number()),
-				}),
-			},
-			responses: {
-				200: response.of<HelloWorldResponse>(),
-			},
-		},
-	},
-	async ({ response }) => {
-		return response.ok({
+export const GET = route()
+	.query(z.object({ id: q.int() }))
+	.returns<HelloWorldResponse>()
+	.summary("Fetch a demo user")
+	.tags("users")
+	.handle(async ({ res }) =>
+		res({
 			user: {
 				id: 1,
 				name: "John Doe",
 				email: "john.doe@example.com",
 				parent: { id: 2, name: "Jane Doe", email: "jane.doe@example.com" },
 			},
-		});
-	},
-);
+		}),
+	);

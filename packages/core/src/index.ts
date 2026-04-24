@@ -10,16 +10,49 @@
  * @module
  */
 
-export * from "./config.ts";
-export * from "./file-router.ts";
+// Public surface of `@ts-api-kit/core`.
+//
+// Route authoring lives in `./route/` — `route()` for the builder,
+// `q` for schema primitives and the response-type marker, plus
+// handler-context types.
+//
+// File-based conventions go through lightweight `defineX` helpers
+// that only exist to tighten TypeScript inference — at runtime they
+// are pass-throughs.
+//
+// Everything else (OpenAPI document assembly, schema introspection,
+// the validation pipeline) is internal; users never import from
+// those modules directly.
+
+export { type DirConfig, defineConfig } from "./config.ts";
 export { mountFileRouter } from "./file-router.ts";
-export * from "./hooks.ts";
-export * from "./middleware.ts";
-export * from "./openapi/builder.ts";
-export * from "./openapi/markers.ts";
-export * from "./openapi/presets.ts";
-export * from "./openapi/registry.ts";
-export * from "./server.ts";
+export { defineMiddleware } from "./middleware.ts";
+export { OpenAPIError } from "./openapi/errors.ts";
+export {
+	ErrorSchema,
+	IdParam,
+	PaginationQuery,
+	TracingHeaders,
+} from "./openapi/presets.ts";
+export {
+	type CookieOptions,
+	type Cookies,
+	type Env,
+	type JsxBody,
+	type LayoutComponent,
+	q,
+	type RedirectStatus,
+	type ResInit,
+	type ResolvedEnv,
+	type ResRuntime,
+	type RouteBuilder,
+	type RouteHandlerContext,
+	route,
+	type StreamCallback,
+	type TextLikeBody,
+	type TypeMarker,
+	type TypeMeta,
+} from "./route/index.ts";
 export { default as Server } from "./server.ts";
 
 import {

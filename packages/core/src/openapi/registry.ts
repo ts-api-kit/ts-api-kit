@@ -6,7 +6,20 @@ import {
 	type OperationConfig,
 	type RouteSchemas,
 } from "./builder.ts";
-import { type ResponseMarker, response } from "./index.ts";
+
+/** Phantom-typed response marker carried by `q.type<T>()`. Internal. */
+type ResponseMarker<T> = {
+	readonly __phantom__?: T;
+	description?: string;
+	contentType?: string;
+	headers?: Record<string, unknown>;
+	examples?: unknown[];
+	deprecated?: boolean;
+};
+
+const DEFAULT_OK_MARKER: ResponseMarker<unknown> = {
+	description: "OK",
+};
 
 /**
  * The main OpenAPI builder instance for the application.
@@ -188,7 +201,7 @@ export function lazyRegister(
 		filePath: partial.filePath,
 		request: partial.request as unknown as RouteSchemas,
 		responses: partial.responses || {
-			200: response.of<AnySchema>({ description: "OK" }),
+			200: DEFAULT_OK_MARKER as ResponseMarker<AnySchema>,
 		},
 	});
 }

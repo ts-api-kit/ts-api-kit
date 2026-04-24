@@ -1,6 +1,6 @@
 # TS API Kit
 
-A modern TypeScript framework for APIs built on Hono with file‑based routing, Valibot validation, and automatic OpenAPI generation.
+A modern TypeScript framework for APIs built on Hono with file-based routing, a fluent `route()` builder, and automatic OpenAPI generation. Zod-first, with Valibot and any other Standard Schema validator working out of the box.
 
 [![npm version](https://badge.fury.io/js/@ts-api-kit/core.svg)](https://badge.fury.io/js/@ts-api-kit/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,12 +8,13 @@ A modern TypeScript framework for APIs built on Hono with file‑based routing, 
 
 ## Highlights
 
-- 📁 File‑based routing with zero boilerplate
-- ✅ Valibot schema validation (type‑safe inputs)
-- 🧰 Native TypeScript DX and strong typing
+- 📁 File-based routing with zero boilerplate
+- 🏗 Fluent `route()` builder — one chain covers request schemas, response markers, and OpenAPI metadata
+- 🧪 Zod + Standard Schema validation; the `q` namespace coerces querystring / path / header primitives without the `pipe(string, transform(Number))` dance
+- 🧰 Native TypeScript DX with end-to-end type inference from schema to handler
 - ⚡ Hono runtime performance
-- 🧩 Composable middlewares
-- 🧾 Automatic OpenAPI generation + docs UI
+- 🧩 Composable per-directory middleware, layouts, error / not-found handlers via `+middleware.ts` / `+layout.tsx` / `+error.ts` / `+not-found.ts`
+- 🧾 Automatic OpenAPI 3.1 generation + Scalar docs UI
 
 ## Packages
 
@@ -27,11 +28,17 @@ This monorepo contains the following packages:
 ### Core framework
 
 ```bash
-npm install @ts-api-kit/core valibot
+npm install @ts-api-kit/core zod
 # or
+pnpm add @ts-api-kit/core zod
+# or
+yarn add @ts-api-kit/core zod
+```
+
+Valibot is supported as an optional peer — install it alongside `zod` (or instead of it) if you prefer:
+
+```bash
 pnpm add @ts-api-kit/core valibot
-# or
-yarn add @ts-api-kit/core valibot
 ```
 
 ### OpenAPI compiler
@@ -48,17 +55,18 @@ pnpm add -D @ts-api-kit/compiler
 
 ```ts
 // src/routes/+route.ts
-import { get, json } from "@ts-api-kit/core";
-import * as v from "valibot";
+import { q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
-export default {
-  GET: get({ query: v.object({ name: v.optional(v.string()) }) }, ({ query }) =>
-    json({
+export const GET = route()
+  .query(z.object({ name: q.str().optional() }))
+  .returns<{ message: string; timestamp: string }>()
+  .handle(async ({ query, res }) =>
+    res({
       message: `Hello ${query.name ?? "World"}!`,
       timestamp: new Date().toISOString(),
-    })
-  ),
-};
+    }),
+  );
 ```
 
 1. Run the server
@@ -133,7 +141,8 @@ MIT — see [LICENSE](./LICENSE).
 ## Acknowledgments
 
 - [Hono](https://hono.dev/) — modern web framework
-- [Valibot](https://valibot.dev/) — validation library
+- [Zod](https://zod.dev/) — first-class validation library
+- [Valibot](https://valibot.dev/) — tiny, tree-shakeable validation via Standard Schema
 - [TypeScript](https://www.typescriptlang.org/) — language
 
 ## Support

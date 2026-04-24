@@ -1,27 +1,14 @@
-/**
- * @fileoverview Server utilities and helpers for @ts-api-kit/core
- *
- * This module provides server-side functionality including:
- * - HTTP method handlers (GET, POST, PUT, PATCH, DELETE, etc.)
- * - Request/response utilities
- * - Error handling
- * - JSX rendering support
- * - Type-safe schema validation
- *
- * @module
- */
+// Minimal runtime server wiring. Just the top-level `Server` class —
+// route declaration lives in `route/` (via `route()` / `q`), file-based
+// discovery in `file-router.ts`, response construction in
+// `route/response.ts`. This file only knows how to boot a Hono app,
+// wire the OpenAPI doc + Scalar UI, and delegate everything else.
 
 import process from "node:process";
 import { serve } from "@hono/node-server";
-import { renderToStream } from "@kitajs/html/suspense";
 import { Scalar } from "@scalar/hono-api-reference";
-import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Context, MiddlewareHandler } from "hono";
+import type { Context } from "hono";
 import { Hono } from "hono";
-import { routePath } from "hono/route";
-import { stream } from "hono/streaming";
-// Type-only Zod imports (optional peer dep)
-import type { ZodTypeAny, z } from "zod";
 import { mountFileRouter } from "./file-router.ts";
 import { resolveErrorForPath, resolveNotFoundForPath } from "./hooks.ts";
 import type { OpenAPIBuilder } from "./openapi/builder.ts";
@@ -30,1032 +17,12 @@ import {
 	getOpenAPIGeneration,
 	getRootOverrides,
 } from "./openapi/overrides.ts";
-import {
-	type AnySchema,
-	buildOpenAPIDocument,
-	type HttpMethod,
-	lazyRegister,
-} from "./openapi/registry.ts";
-import {
-	clearRequestContext,
-	getActiveLayouts,
-	getCurrentFilePath,
-	getRequestContext,
-	getRequestEvent,
-	type LayoutComponent,
-	setActiveLayouts,
-	setCurrentFilePath,
-	setRequestContext,
-} from "./server/context.ts";
-import type {
-	EffectiveSchemas,
-	InferResponse,
-	InferResponses,
-	InferResponseType,
-	ResponseForStatus,
-	RouteSpec,
-	SchemaDefinition,
-	ValidResponse,
-	ValidStatusCodes,
-	WithOpenAPI,
-} from "./server/route-spec.ts";
-import {
-	formatIssues,
-	type InferInput,
-	type InferOutput,
-	type Issue,
-	toStandardSchema,
-	validatePart,
-} from "./server/schema.ts";
+import { buildOpenAPIDocument } from "./openapi/registry.ts";
 import { createLogger } from "./utils/logger.ts";
 
-// Re-export the context surface so long-time consumers that imported
-// these symbols from `@ts-api-kit/core/server` keep working unchanged.
-export {
-	clearRequestContext,
-	getActiveLayouts,
-	getCurrentFilePath,
-	getRequestContext,
-	getRequestEvent,
-	setActiveLayouts,
-	setCurrentFilePath,
-	setRequestContext,
-};
-export type { LayoutComponent };
-// Re-export schema interop so consumers keep their existing imports.
-export { formatIssues, toStandardSchema };
-export type { InferInput, InferOutput, Issue };
-// Re-export route spec types so consumers keep their existing imports.
-export type {
-	InferResponse,
-	InferResponses,
-	InferResponseType,
-	ResponseForStatus,
-	RouteSpec,
-	SchemaDefinition,
-	ValidResponse,
-	ValidStatusCodes,
-	WithOpenAPI,
-};
-/**
- * ──────────────────────────────────────────────────────────────────────────────
- * Error + tiny helpers
- * ──────────────────────────────────────────────────────────────────────────────
- */
-
-/**
- * Custom error class for application-specific errors with HTTP status codes.
- *
- * @example
- * ```typescript
- * throw new AppError(404, "User not found", { userId: 123 });
- * ```
- */
-export class AppError extends Error {
-	public code: number;
-	public meta?: Record<string, unknown>;
-	constructor(code: number, message: string, meta?: Record<string, unknown>) {
-		super(message);
-		this.code = code;
-		this.meta = meta;
-	}
-}
-
-/**
- * Throws an application error with the specified code, message, and optional metadata.
- *
- * @param code - HTTP status code for the error
- * @param message - Error message
- * @param meta - Optional metadata to include with the error
- * @throws {AppError} Always throws an AppError
- *
- * @example
- * ```typescript
- * error(404, "User not found", { userId: 123 });
- * ```
- */
-export const error = (
-	code: number,
-	message: string,
-	meta?: Record<string, unknown>,
-): never => {
-	throw new AppError(code, message, meta);
-};
-
-// Request context, layout chain, and request-event helpers now live in
-// `./server/context.ts` (re-exported above for backwards compatibility).
-/**
- * Creates a JSON response with the provided data.
- *
- * @param data - The data to serialize as JSON
- * @param init - Optional ResponseInit options
- * @returns A Response object with JSON content
- *
- * @example
- * ```typescript
- * return json({ message: "Hello World" });
- * ```
- */
-export const json = <T>(data: T, init?: ResponseInit): Response =>
-	new Response(JSON.stringify(data), {
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
-
-/**
- * Serialises a typed route response to JSON while enforcing the declared
- * response codes and payload shapes.
- *
- * @param data - Data matching the route specification for the given status
- * @param init - Optional init overrides forwarded to the Response constructor
- * @returns A Response containing the JSON representation of the payload
- */
-export const typedJson = <T extends RouteSpec, S extends number = 200>(
-	data: ResponseForStatus<T, S>,
-	init?: ResponseInit,
-): Response =>
-	new Response(JSON.stringify(data), {
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
-
-/**
- * Bag of strongly typed response helpers injected into route handlers so they
- * can emit consistent `Response` objects without repeating boilerplate.
- */
-export interface ResponseTools<T extends RouteSpec> {
-	/**
-	 * JSON response with type-safe status validation.
-	 */
-	json: <S extends ValidStatusCodes<T>>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/**
-	 * Plain text response with type-safe status validation.
-	 */
-	text: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/**
-	 * HTML response with type-safe status validation.
-	 */
-	html: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/**
-	 * JSX/HTML response, accepting a string or async string.
-	 */
-	jsx: <S extends ValidStatusCodes<T>>(
-		data: string | Promise<string> | JSX.Element,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Promise<Response>;
-
-	/**
-	 * Redirect response. Only 3xx status codes are allowed.
-	 */
-	redirect: (url: string, status?: 301 | 302 | 303 | 307 | 308) => Response;
-
-	/**
-	 * Binary/file response with type-safe status validation.
-	 */
-	file: <S extends ValidStatusCodes<T>>(
-		data: Blob | ArrayBuffer | Uint8Array,
-		filename?: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/**
-	 * Streaming response with type-safe status validation.
-	 */
-	stream: <S extends ValidStatusCodes<T>>(
-		stream: ReadableStream,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/**
-	 * Error JSON response with a specific status code.
-	 */
-	error: <S extends ValidStatusCodes<T>>(
-		message: string,
-		status: S,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** OK (200) response. Requires 200 in route responses. */
-	ok: <S extends 200>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/** Created (201) response. Requires 201 in route responses. */
-	created: <S extends 201>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Accepted (202) response. Requires 202 in route responses. */
-	accepted: <S extends 202>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => Response;
-
-	/** No Content (204) response. Requires 204 in route responses. */
-	noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) => Response;
-
-	/** Bad Request (400) response. Requires 400 in route responses. */
-	badRequest: <_S extends 400>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Unauthorized (401) response. Requires 401 in route responses. */
-	unauthorized: <_S extends 401>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Forbidden (403) response. Requires 403 in route responses. */
-	forbidden: <_S extends 403>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Not Found (404) response. Requires 404 in route responses. */
-	notFound: <_S extends 404>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Conflict (409) response. Requires 409 in route responses. */
-	conflict: <_S extends 409>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Unprocessable Entity (422) response. Requires 422 in route responses. */
-	unprocessableEntity: <_S extends 422>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Too Many Requests (429) response. Requires 429 in route responses. */
-	tooManyRequests: <_S extends 429>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-
-	/** Internal Server Error (500) response. Requires 500 in route responses. */
-	internalError: <_S extends 500>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => Response;
-}
-
-/**
- * Renders JSX elements to HTML and returns a Response.
- *
- * @param element - The JSX element to render
- * @returns A Promise that resolves to a Response with HTML content
- *
- * @example
- * ```typescript
- * return jsx(<div>Hello World</div>);
- * ```
- */
-export const jsx = async (element: unknown): Promise<Response> => {
-	let html: string;
-
-	if (typeof element === "string") {
-		html = element;
-	} else if (element instanceof Promise) {
-		html = await element;
-	} else {
-		// Assume it's a JSX element and render it using String()
-		html = String(element);
-	}
-
-	return new Response(html, {
-		headers: { "Content-Type": "text/html" },
-	});
-};
-
-// Converts an unknown value (string | Promise<string> | JSX-like) to an HTML string
-const toHtmlString = async (element: unknown): Promise<string> => {
-	if (typeof element === "string") return element;
-	if (element instanceof Promise) return String(await element);
-	return String(element);
-};
-
-// Helper functions to reduce code duplication
-const createJsonResponse = (
-	data: unknown,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
-) =>
-	new Response(JSON.stringify(data), {
-		status,
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
-
-const createTextResponse = (
-	data: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
-) =>
-	new Response(data, {
-		status,
-		headers: { "Content-Type": "text/plain" },
-		...init,
-	});
-
-const createHtmlResponse = (
-	data: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
-) =>
-	new Response(data, {
-		status,
-		headers: { "Content-Type": "text/html" },
-		...init,
-	});
-
-const createErrorResponse = (
-	message: string,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
-) =>
-	new Response(JSON.stringify({ error: message }), {
-		status,
-		headers: { "Content-Type": "application/json" },
-		...init,
-	});
-
-const createJsxResponse = async (
-	data: string | Promise<string>,
-	status: number,
-	init?: Omit<ResponseInit, "status">,
-) =>
-	new Response(typeof data === "string" ? data : await data, {
-		status,
-		headers: { "Content-Type": "text/html" },
-		...init,
-	});
-
-/**
- * Builds the set of typed response helpers used within request handlers.
- *
- * @returns Helpers that serialise JSON, text, HTML, JSX, redirects and files
- */
-export const createResponseTools = <
-	T extends RouteSpec,
->(): ResponseTools<T> => ({
-	// Typed JSON response with status validation
-	json: <S extends ValidStatusCodes<T>>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, init?.status ?? 200, init),
-
-	// Text response with status validation
-	text: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createTextResponse(data, init?.status ?? 200, init),
-
-	// HTML response with status validation
-	html: <S extends ValidStatusCodes<T>>(
-		data: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createHtmlResponse(data, init?.status ?? 200, init),
-
-	// JSX response with status validation
-	jsx: <S extends ValidStatusCodes<T>>(
-		data: string | Promise<string>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsxResponse(data, init?.status ?? 200, init),
-
-	// Redirect response (always 3xx)
-	redirect: (url: string, status: 301 | 302 | 303 | 307 | 308 = 302) =>
-		new Response(null, {
-			status,
-			headers: { Location: url },
-		}),
-
-	// File response with status validation
-	file: <S extends ValidStatusCodes<T>>(
-		data: Blob | ArrayBuffer | Uint8Array,
-		filename?: string,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => {
-		const headers = new Headers(init?.headers);
-		if (filename) {
-			headers.set("Content-Disposition", `attachment; filename="${filename}"`);
-		}
-		return new Response(data as BodyInit, {
-			status: init?.status ?? 200,
-			...init,
-			headers,
-		});
-	},
-
-	// Stream response with status validation
-	stream: <S extends ValidStatusCodes<T>>(
-		stream: ReadableStream,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) =>
-		new Response(stream, {
-			status: init?.status ?? 200,
-			...init,
-		}),
-
-	// Error response with status validation
-	error: <S extends ValidStatusCodes<T>>(
-		message: string,
-		status: S,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message, status, init),
-
-	// OK response (200) - only if 200 is defined in responses
-	ok: <S extends 200>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, 200, init),
-
-	// Created response (201) - only if 201 is defined in responses
-	created: <S extends 201>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status">,
-	) => createJsonResponse(data, 201, init),
-
-	// Accepted response (202) - only if 202 is defined in responses
-	accepted: <S extends 202>(
-		data: ResponseForStatus<T, S>,
-		init?: Omit<ResponseInit, "status"> & { status?: S },
-	) => createJsonResponse(data, 202, init),
-
-	// No content response (204) - only if 204 is defined in responses
-	noContent: <_S extends 204>(init?: Omit<ResponseInit, "status">) =>
-		new Response(null, { status: 204, ...init }),
-
-	// Bad request response (400) - only if 400 is defined in responses
-	badRequest: <_S extends 400>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Bad Request", 400, init),
-
-	// Unauthorized response (401) - only if 401 is defined in responses
-	unauthorized: <_S extends 401>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Unauthorized", 401, init),
-
-	// Forbidden response (403) - only if 403 is defined in responses
-	forbidden: <_S extends 403>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Forbidden", 403, init),
-
-	// Not found response (404) - only if 404 is defined in responses
-	notFound: <_S extends 404>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Not Found", 404, init),
-
-	// Conflict response (409) - only if 409 is defined in responses
-	conflict: <_S extends 409>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Conflict", 409, init),
-
-	// Unprocessable entity response (422) - only if 422 is defined in responses
-	unprocessableEntity: <_S extends 422>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Unprocessable Entity", 422, init),
-
-	// Too many requests response (429) - only if 429 is defined in responses
-	tooManyRequests: <_S extends 429>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Too Many Requests", 429, init),
-
-	// Internal server error response (500) - only if 500 is defined in responses
-	internalError: <_S extends 500>(
-		message?: string,
-		init?: Omit<ResponseInit, "status">,
-	) => createErrorResponse(message ?? "Internal Server Error", 500, init),
-});
-
-/**
- * Streams chunks of server-rendered JSX to the active Hono response.
- *
- * @param html - Callback that renders HTML for a given request identifier
- * @returns A streaming Response with the rendered HTML
- */
-export const jsxStream = (
-	html: (rid: number | string) => string | Promise<string>,
-): Response => {
-	const ctx = getRequestContext();
-	if (!ctx) {
-		throw new Error("jsxStream must be called within a request context");
-	}
-
-	ctx.header("Content-Type", "text/html; charset=utf-8");
-	const htmlStream = renderToStream(html);
-
-	return stream(ctx, async (stream) => {
-		for await (const chunk of htmlStream) {
-			stream.write(chunk);
-		}
-		stream.close();
-	});
-};
-
-/**
- * Streams JSX using an explicit Hono context, useful when the helper is used
- * outside of the implicit request lifecycle handled by `jsxStream`.
- *
- * @param c - Current Hono request context
- * @param html - Callback that renders HTML for a given request identifier
- * @returns A streaming Response handled by Hono
- */
-export const jsxStreamHono = (
-	c: Context,
-	html: (rid: number | string) => string | Promise<string>,
-): Response => {
-	c.header("Content-Type", "text/html; charset=utf-8");
-	const htmlStream = renderToStream(html);
-	return stream(c, async (stream) => {
-		for await (const chunk of htmlStream) {
-			stream.write(chunk);
-		}
-		stream.close();
-	});
-};
-
-// Standard Schema interop (zod/valibot detection, adapter, validation,
-// issue formatting) now lives in `./server/schema.ts`. The helpers are
-// imported at the top of this file and re-exported for consumers.
-
-// Most route specification types (`SchemaDefinition`, `WithOpenAPI`,
-// `RouteSpec`, `ValidStatusCodes`, etc.) now live in
-// `./server/route-spec.ts`. They're imported at the top of this file
-// and re-exported above for backward compatibility. `HandlerContext`
-// stays here because it references `ResponseTools`, which is defined
-// alongside the response helpers in this file.
-
-/**
- * Strongly-typed context passed to route handlers after validation.
- */
-export type HandlerContext<T extends RouteSpec> = {
-	params: EffectiveSchemas<T>["params"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["params"]>
-		: EffectiveSchemas<T>["params"] extends ZodTypeAny
-			? z.output<EffectiveSchemas<T>["params"]>
-			: Record<string, unknown>;
-	query: EffectiveSchemas<T>["query"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["query"]>
-		: EffectiveSchemas<T>["query"] extends ZodTypeAny
-			? z.output<EffectiveSchemas<T>["query"]>
-			: Record<string, unknown>;
-	headers: EffectiveSchemas<T>["headers"] extends StandardSchemaV1<
-		unknown,
-		unknown
-	>
-		? InferOutput<EffectiveSchemas<T>["headers"]>
-		: EffectiveSchemas<T>["headers"] extends ZodTypeAny
-			? z.output<EffectiveSchemas<T>["headers"]>
-			: Record<string, string>;
-	body: EffectiveSchemas<T>["body"] extends StandardSchemaV1<unknown, unknown>
-		? InferOutput<EffectiveSchemas<T>["body"]>
-		: EffectiveSchemas<T>["body"] extends ZodTypeAny
-			? z.output<EffectiveSchemas<T>["body"]>
-			: unknown;
-	response: ResponseTools<T>;
-};
-
-function pickContentType(req: {
-	header: (name: string) => string | undefined;
-}): string {
-	return (req.header("content-type") || "").toLowerCase();
-}
-
-function coerceQuery(obj: Record<string, unknown>) {
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(obj)) {
-		if (v === "") {
-			out[k] = undefined;
-			continue;
-		}
-		// Disabled: automatic string-to-number coercion
-		// if (typeof v === "string" && /^-?\d+$/.test(v)) { out[k] = Number(v); continue; }
-		if (v === "true" || v === "false") {
-			out[k] = v === "true";
-			continue;
-		}
-		out[k] = v;
-	}
-	return out;
-}
-
-function extractSchemas(spec?: RouteSpec) {
-	const req =
-		(spec as WithOpenAPI)?.openapi?.request ??
-		(spec as SchemaDefinition) ??
-		undefined;
-	const res = (spec as WithOpenAPI)?.openapi?.responses;
-	const meta = (spec as WithOpenAPI)?.openapi
-		? {
-				summary: (spec as WithOpenAPI).openapi?.summary,
-				tags: (spec as WithOpenAPI).openapi?.tags,
-			}
-		: {};
-	return { req, res, meta } as const;
-}
-
-/**
- * Creates a Hono-compatible handler that validates inputs, enriches the
- * request context and lazily registers OpenAPI metadata on first invocation.
- *
- * @param spec - Optional route specification containing schemas and metadata
- * @param handler - Business logic executed after validation succeeds
- * @returns A function that can be mounted onto a Hono router
- */
-export function createHandler<T extends RouteSpec>(
-	spec: T | undefined,
-	handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>,
-): (c: Context) => Promise<Response> {
-	let registered = false;
-	return async (c: Context) => {
-		try {
-			setRequestContext(c);
-
-			// Lazy registration: method + path of the Hono route
-			if (!registered && spec && (spec as WithOpenAPI).openapi) {
-				// Hono exposes the route pattern in c.req.routePath in v4+; fallback to c.req.path
-				const method = c.req.method.toLowerCase() as HttpMethod;
-				let path: string;
-				try {
-					path = routePath(c) ?? c.req.path;
-				} catch {
-					// routePath can fail in some environments (e.g., Cloudflare Workers)
-					// Fallback to the request path
-					path = c.req.path;
-				}
-				const { req, res, meta } = extractSchemas(spec);
-				// this.log.info(`Registering OpenAPI route: ${method} ${path}`);
-				// this.log.info(`Request schemas:`, req);
-				// this.log.info(`Response schemas:`, res);
-				// this.log.info(`Meta:`, meta);
-				lazyRegister(method, path, { request: req, responses: res, ...meta });
-				registered = true;
-			}
-
-			const rawParams = c.req.param();
-			const rawQuery = coerceQuery(
-				Object.fromEntries(Object.entries(c.req.query())),
-			);
-			const rawHeaders = Object.fromEntries(Object.entries(c.req.header()));
-
-			let rawBody: unknown = {};
-			try {
-				const ct = pickContentType(c.req);
-				if (ct.includes("application/json")) rawBody = await c.req.json();
-				else if (ct.includes("text/plain")) rawBody = await c.req.text();
-				else if (ct.includes("application/x-www-form-urlencoded"))
-					rawBody = await c.req.parseBody();
-			} catch {
-				rawBody = {};
-			}
-
-			const { req: reqSchemas } = extractSchemas(spec);
-
-			const P = await validatePart(
-				"params",
-				reqSchemas?.params as AnySchema,
-				rawParams,
-			);
-			const Q = await validatePart(
-				"query",
-				reqSchemas?.query as AnySchema,
-				rawQuery,
-			);
-			const H = await validatePart(
-				"headers",
-				reqSchemas?.headers as AnySchema,
-				rawHeaders,
-			);
-			const B = await validatePart(
-				"body",
-				reqSchemas?.body as AnySchema,
-				rawBody,
-			);
-
-			const details = [P.issues, Q.issues, H.issues, B.issues].filter(
-				Boolean,
-			) as Array<{ location: string; issues: Issue[] }>;
-			if (details.length) {
-				return createJsonResponse(
-					{
-						error: {
-							code: "VALIDATION_ERROR",
-							message: "Invalid request payload",
-							details,
-						},
-					},
-					400,
-				);
-			}
-
-			const result = await handler({
-				params: P.value,
-				query: Q.value,
-				headers: H.value,
-				body: B.value,
-			} as HandlerContext<NonNullable<T>>);
-
-			if (result instanceof Response) return result;
-
-			// Extract optional { status, body } shape
-			let status = 200;
-			let body: unknown = result;
-			if (
-				body &&
-				typeof body === "object" &&
-				"status" in (body as Record<string, unknown>) &&
-				"body" in (body as Record<string, unknown>)
-			) {
-				const r = body as { status?: unknown; body?: unknown };
-				status =
-					typeof r.status === "number" ? r.status : Number(r.status) || 200;
-				body = r.body;
-			}
-
-			// If there are active layouts, render through them and return HTML
-			const layouts = getActiveLayouts();
-			if (layouts.length) {
-				let composed: unknown = body;
-				// Apply layouts from leaf-most backwards: root → ... → leaf
-				for (let i = layouts.length - 1; i >= 0; i--) {
-					composed = await layouts[i]({ children: composed });
-				}
-				const html = await toHtmlString(composed);
-				return createHtmlResponse(html, status);
-			}
-
-			// Check if current file is JSX/TSX - if so, treat as HTML
-			const currentFile = getCurrentFilePath();
-			const isJSXFile =
-				currentFile &&
-				(currentFile.endsWith(".jsx") || currentFile.endsWith(".tsx"));
-
-			if (isJSXFile) {
-				const html = await toHtmlString(body);
-				return createHtmlResponse(html, status);
-			}
-
-			// Otherwise, default to JSON
-			return createJsonResponse(body, status);
-		} catch (err) {
-			// Allow scoped error handlers defined via +error.ts to render the error
-			try {
-				const scoped = resolveErrorForPath(c.req.path);
-				if (scoped) return await scoped(err, c);
-			} catch {
-				// ignore and fall through to default handling
-			}
-			if (err instanceof AppError) {
-				return createJsonResponse(
-					{
-						error: {
-							code: "APP_ERROR",
-							message: err.message,
-							...(err.meta ? { meta: err.meta } : {}),
-						},
-					},
-					err.code,
-				);
-			}
-			return c.json(
-				{ error: { code: "INTERNAL", message: "Internal Server Error" } },
-				500,
-			);
-		} finally {
-			// clear context and forget layouts for this request
-			clearRequestContext();
-		}
-	};
-}
-
-/**
- * Enhances a schema definition with helpers that surface Standard Schema
- * adapters for each request segment.
- *
- * @param schema - Route schema covering params, query, headers and body
- * @returns Original schema together with a `getStandardSchema` accessor
- */
-export function createSchema<T extends SchemaDefinition>(
-	schema: T,
-): T & {
-	getStandardSchema(): {
-		query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
-		params?: StandardSchemaV1<
-			InferInput<T["params"]>,
-			InferOutput<T["params"]>
-		>;
-		headers?: StandardSchemaV1<
-			InferInput<T["headers"]>,
-			InferOutput<T["headers"]>
-		>;
-		body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-	};
-} {
-	return {
-		...schema,
-		getStandardSchema(): {
-			query?: StandardSchemaV1<InferInput<T["query"]>, InferOutput<T["query"]>>;
-			params?: StandardSchemaV1<
-				InferInput<T["params"]>,
-				InferOutput<T["params"]>
-			>;
-			headers?: StandardSchemaV1<
-				InferInput<T["headers"]>,
-				InferOutput<T["headers"]>
-			>;
-			body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-		} {
-			return {
-				query: schema.query
-					? toStandardSchema(
-							schema.query as AnySchema,
-							"hono-file-router:query",
-						)
-					: undefined,
-				params: schema.params
-					? toStandardSchema(
-							schema.params as AnySchema,
-							"hono-file-router:params",
-						)
-					: undefined,
-				headers: schema.headers
-					? toStandardSchema(
-							schema.headers as AnySchema,
-							"hono-file-router:headers",
-						)
-					: undefined,
-				body: schema.body
-					? toStandardSchema(schema.body as AnySchema, "hono-file-router:body")
-					: undefined,
-			} as {
-				query?: StandardSchemaV1<
-					InferInput<T["query"]>,
-					InferOutput<T["query"]>
-				>;
-				params?: StandardSchemaV1<
-					InferInput<T["params"]>,
-					InferOutput<T["params"]>
-				>;
-				headers?: StandardSchemaV1<
-					InferInput<T["headers"]>,
-					InferOutput<T["headers"]>
-				>;
-				body?: StandardSchemaV1<InferInput<T["body"]>, InferOutput<T["body"]>>;
-			};
-		},
-	};
-}
-
-/**
- * Creates a GET route handler with type-safe request/response validation.
- */
-type RouteFactory = <T extends RouteSpec>(
-	spec: T | undefined,
-	handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>,
-) => (c: Context) => Promise<Response>;
-
-export const get: RouteFactory = createHandler;
-
-/**
- * Creates a POST route handler with type-safe request/response validation.
- */
-export const post: RouteFactory = createHandler;
-
-/**
- * Creates a PUT route handler with type-safe request/response validation.
- */
-export const put: RouteFactory = createHandler;
-
-/**
- * Creates a PATCH route handler with type-safe request/response validation.
- */
-export const patch: RouteFactory = createHandler;
-
-/**
- * Creates a DELETE route handler with type-safe request/response validation.
- */
-export const del: RouteFactory = createHandler;
-
-/**
- * Creates an OPTIONS route handler with type-safe request/response validation.
- */
-export const options: RouteFactory = createHandler;
-
-/**
- * Creates a HEAD route handler with type-safe request/response validation.
- */
-export const head: RouteFactory = createHandler;
-
-/**
- * Flexible wrapper that converts either a spec + handler pair or a standalone
- * handler into a fully configured route with metadata attached for OpenAPI.
- *
- * @param specOrHandler - Route configuration or the handler itself
- * @param handlerOrFilePath - Handler (when a spec is provided) or the file path
- * @param filePath - Optional override for the source file path used in docs
- * @returns Hono handler augmented with route configuration metadata
- */
-export function handle<T extends RouteSpec = RouteSpec>(
-	specOrHandler:
-		| T
-		| ((context: HandlerContext<NonNullable<T>>) => unknown | Promise<unknown>),
-	handlerOrFilePath?: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown> | string,
-	filePath?: string,
-): ReturnType<typeof createHandler> & { __routeConfig: T } {
-	// Check if first argument is a spec object or a handler function
-	const isSpecObject =
-		typeof specOrHandler === "object" &&
-		specOrHandler !== null &&
-		!("call" in specOrHandler);
-
-	let spec: T;
-	let handler: (
-		context: HandlerContext<NonNullable<T>>,
-	) => unknown | Promise<unknown>;
-	let effectiveFilePath: string | undefined;
-
-	if (isSpecObject) {
-		// handle(spec, handler, filePath?)
-		spec = specOrHandler as T;
-		handler = handlerOrFilePath as (
-			context: HandlerContext<NonNullable<T>>,
-		) => unknown | Promise<unknown>;
-		effectiveFilePath = filePath;
-	} else {
-		// handle(handler, filePath?)
-		spec = {} as T;
-		handler = specOrHandler as (
-			context: HandlerContext<NonNullable<T>>,
-		) => unknown | Promise<unknown>;
-		effectiveFilePath = handlerOrFilePath as string | undefined;
-	}
-
-	const openapi = (spec as { openapi?: unknown }).openapi;
-	if (openapi) {
-		// Use provided filePath or fall back to current file path from context
-		const finalFilePath = effectiveFilePath || getCurrentFilePath();
-		if (finalFilePath) {
-			(openapi as { filePath?: string }).filePath = finalFilePath;
-		}
-		// Don't register here - let file-router handle it after method inference
-		// register(openapi);
-	}
-
-	// Create handler and attach metadata. Do not serialize here — leave it to createHandler
-	const h = createHandler(spec, async (context) => {
-		const responseTools = createResponseTools<NonNullable<T>>();
-		const fullContext = {
-			...context,
-			response: responseTools,
-		} as HandlerContext<NonNullable<T>>;
-		return await handler(fullContext);
-	});
-
-	(h as unknown as { __routeConfig: T }).__routeConfig = spec ?? ({} as T);
-	return h as typeof h & { __routeConfig: T };
-}
-
-/**
- * Minimal server wiring + OpenAPI/Scalar
- */
 export default class Server {
 	private app = new Hono();
 	private port: number = parseInt(process.env.PORT ?? "3000", 10);
-
 	private log = createLogger("core:server");
 
 	constructor(port?: number) {
@@ -1063,7 +30,6 @@ export default class Server {
 	}
 
 	private setupApp(): void {
-		// Helper: interpolate placeholders in doc using request URL and package.json
 		type OpenAPIDoc = ReturnType<OpenAPIBuilder["toJSON"]>;
 		const replaceServerPlaceholders = (
 			url: string,
@@ -1072,21 +38,22 @@ export default class Server {
 			port: string,
 			origin: string,
 		): string => {
-			const P_PROTOCOL = "$" + "{protocol}";
-			const P_HOST = "$" + "{host}";
-			const P_PORT = "$" + "{port}";
-			const P_ORIGIN = "$" + "{origin}";
+			const P_PROTOCOL = `$${"{protocol}"}`;
+			const P_HOST = `$${"{host}"}`;
+			const P_PORT = `$${"{port}"}`;
+			const P_ORIGIN = `$${"{origin}"}`;
 			return String(url ?? "")
 				.replaceAll(P_PROTOCOL, proto)
 				.replaceAll(P_HOST, u.hostname)
 				.replaceAll(P_PORT, port)
 				.replaceAll(P_ORIGIN, origin);
 		};
-		// Extend with fields Deno language server may not pick up from builder
+
 		type OpenAPIDocExt = OpenAPIDoc & {
 			externalDocs?: { url: string; description?: string };
 			servers: { url: string; description?: string }[];
 		};
+
 		const interpolateDoc = async (doc: OpenAPIDocExt, c: Context) => {
 			try {
 				const u = new URL(c.req.url);
@@ -1111,7 +78,6 @@ export default class Server {
 					// noop
 				}
 
-				// Apply sensible defaults when user didn't provide them
 				if (!doc.info) doc.info = { title: "", version: "" };
 				const info = doc.info;
 				if (!info.title)
@@ -1152,378 +118,141 @@ export default class Server {
 				const interp = (val: unknown): unknown => {
 					if (typeof val !== "string") return val;
 					let out = val as string;
-					// ${key} form
-					out = out.replace(/\$\{\s*([a-zA-Z0-9_.-]+)\s*\}/g, (_m, g1) =>
-						lookup(String(g1)),
+					out = out.replace(
+						/\$\{([^}]+)\}/g,
+						(_m, key: string) => lookup(key.trim()) ?? "",
 					);
-					// {{key}} form
-					out = out.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_m, g1) =>
-						lookup(String(g1)),
-					);
+					out = replaceServerPlaceholders(out, u, proto, port, origin);
 					return out;
 				};
 
-				// servers[].url
-				if (Array.isArray(doc.servers)) {
-					doc.servers = doc.servers.map(
-						(s: { url: string; description?: string }) => ({
-							...s,
-							url: String(interp(s.url)),
-						}),
-					);
+				const walk = (node: unknown): unknown => {
+					if (Array.isArray(node)) return node.map(walk);
+					if (node && typeof node === "object") {
+						const out: Record<string, unknown> = {};
+						for (const [k, v] of Object.entries(
+							node as Record<string, unknown>,
+						))
+							out[k] = walk(v);
+						return out;
+					}
+					return interp(node);
+				};
+
+				for (const [k, v] of Object.entries(
+					doc as unknown as Record<string, unknown>,
+				)) {
+					(doc as unknown as Record<string, unknown>)[k] = walk(v);
 				}
-				// info.title / info.description
-				if (doc.info) {
-					doc.info.title = String(interp(doc.info.title));
-					doc.info.version = String(interp(doc.info.version));
-					doc.info.description = String(interp(doc.info.description ?? ""));
-				}
-				// externalDocs.url
-				if (doc.externalDocs) {
-					doc.externalDocs.url = String(interp(doc.externalDocs.url));
-				}
-			} catch {
-				// noop
+			} catch (err) {
+				this.log.error("interpolateDoc failed", err);
 			}
 		};
+
 		this.app.use("*", async (c, next) => {
-			c.res.headers.set("x-powered-by", "hono-file-router");
-			await next();
-		});
-
-		// MOUNT ROUTES by file system (fora daqui)
-		// mountFileRouter(this.app, { routesDir: "./src/routes", basePath: "" });
-
-		// ── OpenAPI JSON served from the statically generated file
-		this.app.get("/openapi.json", async (c) => {
 			try {
-				const fs = await import("node:fs");
-				const path = await import("node:path");
-
-				// Tenta carregar o arquivo openapi.json gerado estaticamente
-				const openapiPath = path.join(process.cwd(), "openapi.json");
-
-				const genCtl = getOpenAPIGeneration();
-				if (genCtl.mode === "memory") {
-					try {
-						const p = await import("node:path");
-						const os = await import("node:os");
-						const fs2 = await import("node:fs");
-						const { generateOpenAPI } = await import(
-							"./openapi/generator/index.ts"
-						);
-						const tmpFile = p.join(os.tmpdir(), `openapi.${Date.now()}.json`);
-						await generateOpenAPI(genCtl.project || "./tsconfig.json", tmpFile);
-						const doc = JSON.parse(fs2.readFileSync(tmpFile, "utf-8"));
-						try {
-							fs2.unlinkSync(tmpFile);
-						} catch {
-							// noop
-						}
-						// Merge defaults then root overrides
-						try {
-							const apply = (
-								o?: import("./openapi/overrides.ts").RootOverrides,
-							) => {
-								if (!o) return;
-								if (o.info) doc.info = { ...doc.info, ...o.info };
-								if (o.servers?.length) doc.servers = o.servers;
-								if (o.tags?.length) doc.tags = o.tags;
-								if (o.externalDocs) doc.externalDocs = o.externalDocs;
-								if (o.components?.securitySchemes) {
-									doc.components =
-										doc.components || ({} as typeof doc.components);
-									doc.components.securitySchemes = {
-										...(doc.components?.securitySchemes || {}),
-										...o.components.securitySchemes,
-									};
-								}
-								if (o.extensions) {
-									for (const [k, v] of Object.entries(o.extensions)) {
-										if (k.startsWith("x-"))
-											(doc as unknown as Record<string, unknown>)[k] =
-												v as unknown;
-									}
-								}
-							};
-							apply(getDefaultOpenAPI());
-							apply(getRootOverrides());
-						} catch {
-							// noop
-						}
-						// Interpolate placeholders in servers for memory mode
-						try {
-							const u = new URL(c.req.url);
-							const proto = u.protocol.replace(":", "");
-							const port = u.port || (u.protocol === "https:" ? "443" : "80");
-							const origin = `${u.protocol}//${u.host}`;
-							if (Array.isArray(doc.servers)) {
-								doc.servers = doc.servers.map(
-									(s: { url: string; description?: string }) => ({
-										...s,
-										url: replaceServerPlaceholders(
-											String(s.url ?? ""),
-											u,
-											proto,
-											port,
-											origin,
-										),
-									}),
-								);
-							}
-						} catch {
-							// noop
-						}
-
-						await interpolateDoc(doc, c);
-						return c.json(doc, {
-							headers: {
-								"Access-Control-Allow-Origin": "*",
-								"Access-Control-Allow-Methods":
-									"GET, POST, PUT, DELETE, OPTIONS",
-								"Access-Control-Allow-Headers": "Content-Type, Authorization",
-								"Content-Type": "application/json",
-							},
-						});
-					} catch {
-						// noop
-					}
-				}
-
-				if (fs.existsSync(openapiPath)) {
-					const openapiContent = fs.readFileSync(openapiPath, "utf-8");
-					const doc = JSON.parse(openapiContent);
-					// Merge defaults then root-level overrides
-					try {
-						const apply = (
-							o?: import("./openapi/overrides.ts").RootOverrides,
-						) => {
-							if (!o) return;
-							if (o.info)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).info = {
-									...(doc as ReturnType<OpenAPIBuilder["toJSON"]>).info,
-									...o.info,
-								};
-							if (o.servers?.length) {
-								const u = new URL(c.req.url);
-								const proto = u.protocol.replace(":", "");
-								const port = u.port || (u.protocol === "https:" ? "443" : "80");
-								const origin = `${u.protocol}//${u.host}`;
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers =
-									o.servers.map((s) => ({
-										...s,
-										url: replaceServerPlaceholders(
-											String(s.url ?? ""),
-											u,
-											proto,
-											port,
-											origin,
-										),
-									}));
-							}
-							if (o.tags?.length)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).tags = o.tags;
-							if (o.externalDocs)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).externalDocs =
-									o.externalDocs;
-							if (o.components?.securitySchemes) {
-								const d = doc as ReturnType<OpenAPIBuilder["toJSON"]>;
-								d.components = d.components || ({} as typeof d.components);
-								d.components.securitySchemes = {
-									...(d.components?.securitySchemes || {}),
-									...o.components.securitySchemes,
-								};
-							}
-							if (o.extensions) {
-								for (const [k, v] of Object.entries(o.extensions)) {
-									if (k.startsWith("x-"))
-										(doc as unknown as Record<string, unknown>)[k] =
-											v as unknown;
-								}
-							}
-						};
-						apply(getDefaultOpenAPI());
-						apply(getRootOverrides());
-					} catch {
-						// noop
-					}
-
-					// Final interpolation of server URL placeholders
-					try {
-						const u = new URL(c.req.url);
-						const proto = u.protocol.replace(":", "");
-						const port = u.port || (u.protocol === "https:" ? "443" : "80");
-						const origin = `${u.protocol}//${u.host}`;
-						if (
-							Array.isArray(
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers,
-							)
-						) {
-							(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers = (
-								doc as ReturnType<OpenAPIBuilder["toJSON"]>
-							).servers.map((s) => ({
-								...s,
-								url: replaceServerPlaceholders(
-									String(s.url ?? ""),
-									u,
-									proto,
-									port,
-									origin,
-								),
-							}));
-						}
-					} catch {
-						// noop
-					}
-
-					await interpolateDoc(doc as ReturnType<OpenAPIBuilder["toJSON"]>, c);
-					return c.json(doc, {
-						headers: {
-							"Access-Control-Allow-Origin": "*",
-							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-							"Access-Control-Allow-Headers": "Content-Type, Authorization",
-							"Content-Type": "application/json",
-						},
-					});
-				} else {
-					// Fallback to the runtime registration system
-					const serverUrl = new URL(c.req.url);
-					const doc = buildOpenAPIDocument({
-						title: "API",
-						version: "1.0.0",
-						servers: [{ url: `${serverUrl.protocol}//${serverUrl.host}` }],
-					});
-					// Merge root-level overrides from serve({ openapi })
-					try {
-						const o = getRootOverrides();
-						if (o) {
-							if (o.info)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).info = {
-									...(doc as ReturnType<OpenAPIBuilder["toJSON"]>).info,
-									...o.info,
-								};
-							if (o.servers?.length) {
-								const u = new URL(c.req.url);
-								const proto = u.protocol.replace(":", "");
-								const port = u.port || (u.protocol === "https:" ? "443" : "80");
-								const origin = `${u.protocol}//${u.host}`;
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers =
-									o.servers.map((s) => ({
-										...s,
-										url: replaceServerPlaceholders(
-											s.url,
-											u,
-											proto,
-											port,
-											origin,
-										),
-									}));
-							}
-							if (o.tags?.length)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).tags = o.tags;
-							if (o.externalDocs)
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).externalDocs =
-									o.externalDocs;
-							if (o.components?.securitySchemes) {
-								const d2 = doc as ReturnType<OpenAPIBuilder["toJSON"]>;
-								d2.components = d2.components || ({} as typeof d2.components);
-								d2.components.securitySchemes = {
-									...(d2.components?.securitySchemes || {}),
-									...o.components.securitySchemes,
-								};
-							}
-							if (o.extensions) {
-								for (const [k, v] of Object.entries(o.extensions)) {
-									if (k.startsWith("x-"))
-										(doc as unknown as Record<string, unknown>)[k] =
-											v as unknown;
-								}
-							}
-						}
-					} catch {
-						// noop
-					}
-					// Final interpolation of server URL placeholders
-					try {
-						const u = new URL(c.req.url);
-						const proto = u.protocol.replace(":", "");
-						const port = u.port || (u.protocol === "https:" ? "443" : "80");
-						const origin = `${u.protocol}//${u.host}`;
-						if (
-							Array.isArray(
-								(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers,
-							)
-						) {
-							(doc as ReturnType<OpenAPIBuilder["toJSON"]>).servers = (
-								doc as ReturnType<OpenAPIBuilder["toJSON"]>
-							).servers.map((s) => ({
-								...s,
-								url: replaceServerPlaceholders(
-									String(s.url ?? ""),
-									u,
-									proto,
-									port,
-									origin,
-								),
-							}));
-						}
-					} catch {
-						// noop
-					}
-
-					return c.json(doc, {
-						headers: {
-							"Access-Control-Allow-Origin": "*",
-							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-							"Access-Control-Allow-Headers": "Content-Type, Authorization",
-							"Content-Type": "application/json",
-						},
-					});
-				}
-			} catch (error) {
-				this.log.error("OpenAPI generation error:", error);
+				await next();
+			} catch (e) {
+				this.log.error("Unhandled error", e);
+				const u = new URL(c.req.url);
+				const scoped = resolveErrorForPath(u.pathname);
+				if (scoped) return scoped(e, c);
 				return c.json(
 					{
-						error: "Failed to generate OpenAPI document",
-						details: error instanceof Error ? error.message : String(error),
+						error: "Internal Server Error",
+						message: String((e as Error)?.message ?? e),
 					},
 					500,
 				);
 			}
 		});
 
-		// ── Scalar UI at /docs
+		this.app.get("/openapi.json", async (c) => {
+			try {
+				const genCtl = getOpenAPIGeneration();
+				if (genCtl.mode === "memory") {
+					try {
+						const p = await import("node:path");
+						const os = await import("node:os");
+						const fs = await import("node:fs");
+						const { generateOpenAPI } = await import(
+							"./openapi/generator/index.ts"
+						);
+						const tmpFile = p.join(os.tmpdir(), `openapi.${Date.now()}.json`);
+						await generateOpenAPI(genCtl.project || "./tsconfig.json", tmpFile);
+						const doc = JSON.parse(fs.readFileSync(tmpFile, "utf-8"));
+						try {
+							fs.unlinkSync(tmpFile);
+						} catch {
+							// noop
+						}
+						await interpolateDoc(doc as OpenAPIDocExt, c);
+						return c.json(doc);
+					} catch (err) {
+						this.log.error("Compiler-mode OpenAPI generation failed", err);
+					}
+				}
+
+				const serverUrl = new URL(c.req.url);
+				const doc = buildOpenAPIDocument({
+					title: "API",
+					version: "1.0.0",
+					servers: [{ url: `${serverUrl.protocol}//${serverUrl.host}` }],
+				}) as OpenAPIDocExt;
+				const o = getRootOverrides() ?? getDefaultOpenAPI();
+				if (o) {
+					if (o.info) doc.info = { ...doc.info, ...o.info };
+					if (o.servers?.length) doc.servers = o.servers;
+					if (o.tags?.length) doc.tags = o.tags;
+					if (o.externalDocs) doc.externalDocs = o.externalDocs;
+					if (o.components?.securitySchemes) {
+						doc.components = doc.components ?? ({} as typeof doc.components);
+						doc.components.securitySchemes = {
+							...(doc.components.securitySchemes ?? {}),
+							...o.components.securitySchemes,
+						};
+					}
+					if (o.extensions) {
+						for (const [k, v] of Object.entries(o.extensions)) {
+							if (k.startsWith("x-"))
+								(doc as unknown as Record<string, unknown>)[k] = v;
+						}
+					}
+				}
+				await interpolateDoc(doc, c);
+				return c.json(doc);
+			} catch (err) {
+				this.log.error("Failed to build OpenAPI document", err);
+				return c.json({ error: "Failed to build OpenAPI document" }, 500);
+			}
+		});
+
 		this.app.get(
 			"/docs",
 			Scalar({
-				theme: "default",
-				layout: "modern",
-				spec: {
-					url: "/openapi.json",
-				},
-			} as unknown as Parameters<
-				typeof Scalar
-			>[0]) as unknown as MiddlewareHandler,
+				url: "/openapi.json",
+				theme: "saturn",
+			}),
 		);
 
 		this.app.notFound(async (c) => {
-			try {
-				const h = resolveNotFoundForPath(c.req.path);
-				if (h) return await h(c);
-			} catch (e) {
-				this.log.error("notFound handler error:", e);
-			}
+			const u = new URL(c.req.url);
+			const scoped = resolveNotFoundForPath(u.pathname);
+			if (scoped) return scoped(c);
 			return c.json({ error: "Not Found" }, 404);
 		});
+
 		this.app.onError(async (err, c) => {
-			try {
-				const h = resolveErrorForPath(c.req.path);
-				if (h) return await h(err, c);
-			} catch (e) {
-				this.log.error("onError handler error:", e);
-			}
-			this.log.error(err);
-			return c.json({ error: "Internal Server Error" }, 500);
+			const u = new URL(c.req.url);
+			const scoped = resolveErrorForPath(u.pathname);
+			if (scoped) return scoped(err, c);
+			return c.json(
+				{
+					error: "Internal Server Error",
+					message: String(err?.message ?? err),
+				},
+				500,
+			);
 		});
 	}
 
@@ -1533,8 +262,6 @@ export default class Server {
 	): Promise<void> {
 		this.setupApp();
 		await mountFileRouter(this.app, { routesDir, basePath });
-		// const { generateOpenAPI } = await import("@ts-api-kit/compiler/openapi-generator.ts");
-		// generateOpenAPI(routesDir, "openapi.json");
 	}
 
 	start(port?: number): void {
@@ -1547,16 +274,7 @@ export default class Server {
 
 	/**
 	 * Dispatches a `Request` through the internal Hono app without binding
-	 * to a port. Useful for smoke tests and in-process integration tests.
-	 *
-	 * @example
-	 * ```ts
-	 * const s = new Server();
-	 * await s.configureRoutes("./src/routes");
-	 * const res = await s.fetch(new Request("http://example/"));
-	 * ```
+	 * to a port. Useful for in-process integration tests.
 	 */
-	fetch = async (req: Request): Promise<Response> => {
-		return this.app.fetch(req);
-	};
+	fetch = async (req: Request): Promise<Response> => this.app.fetch(req);
 }

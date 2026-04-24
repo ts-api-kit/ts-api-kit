@@ -1,58 +1,23 @@
-import { handle, json, response } from "@ts-api-kit/core";
-import * as v from "valibot";
+import { q, route } from "@ts-api-kit/core";
+import { z } from "zod";
 
-/**
- * @openapi
- * /{locale}:
- *   get:
- *     summary: Get localized content
- *     description: Returns content for the specified locale (optional)
- *     parameters:
- *       - name: locale
- *         in: path
- *         required: false
- *         schema:
- *           type: string
- *           enum: [en, es, fr, de]
- *     responses:
- *       200:
- *         description: Localized content
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 locale:
- *                   type: string
- *                 message:
- *                   type: string
- */
-export const GET = handle(
-	{
-		openapi: {
-			request: {
-				params: v.object({
-					locale: v.optional(v.string()),
-				}),
-			},
-			responses: {
-				200: response.of<{ locale: string; message: string }>(),
-			},
-		},
-	},
-	({ params }) => {
-		const locale = params.locale || "en";
+const MESSAGES = {
+	en: "Hello!",
+	es: "¡Hola!",
+	fr: "Bonjour!",
+	de: "Hallo!",
+} as const;
 
-		const messages = {
-			en: "Hello!",
-			es: "¡Hola!",
-			fr: "Bonjour!",
-			de: "Hallo!",
-		};
+type Locale = keyof typeof MESSAGES;
 
-		return json({
-			locale,
-			message: messages[locale as keyof typeof messages] || messages.en,
-		});
-	},
-);
+export const GET = route()
+	.params(z.object({ locale: q.enum(["en", "es", "fr", "de"]).optional() }))
+	.returns<{ locale: Locale; message: string }>()
+	.summary("Get localized content")
+	.description(
+		"Returns a greeting in the requested locale — English when the segment is omitted.",
+	)
+	.handle(async ({ params, res }) => {
+		const locale: Locale = params.locale ?? "en";
+		return res({ locale, message: MESSAGES[locale] });
+	});

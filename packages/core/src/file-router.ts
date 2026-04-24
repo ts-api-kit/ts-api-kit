@@ -9,11 +9,11 @@ import { OpenAPIError } from "./openapi/errors.ts";
 import type { HttpMethod } from "./openapi/registry.ts";
 import { lazyRegister } from "./openapi/registry.ts";
 import {
-	handle,
 	type LayoutComponent,
 	setActiveLayouts,
 	setCurrentFilePath,
-} from "./server.ts";
+} from "./route/context.ts";
+import { route } from "./route/index.ts";
 import type {
 	ErrorModule,
 	MountResult,
@@ -24,7 +24,11 @@ import { readRouteJSDocForExport } from "./utils/jsdoc-extractor.ts";
 import { createLogger, type Logger, setLogLevel } from "./utils/logger.ts";
 import { mergeOpenAPI } from "./utils/merge.ts";
 import { derivePathsFromFile } from "./utils/path-derivation.ts";
-import { toArray } from "./utils.ts";
+
+function toArray<T>(x: T | T[] | undefined): T[] {
+	if (!x) return [];
+	return Array.isArray(x) ? x : [x];
+}
 
 function pickFunc(mod: Record<string, unknown>, names: string[]): unknown {
 	for (const n of names) {
@@ -497,14 +501,15 @@ export async function mountFileRouter(
 			}
 		}
 
-		// For TSX/JSX routes: allow default export function as ALL with text/html
+		// For TSX/JSX routes: the default export is a component that we
+		// render to HTML. Wrap it in a no-schema `route()` so the handler
+		// integrates with the normal pipeline (layouts, cookies, etc).
 		const isJsxRoute = file.endsWith(".tsx") || file.endsWith(".jsx");
 		if (isJsxRoute && defFn) {
-			const wrapped = handle(
-				(_) => (defFn as () => unknown)(),
-				undefined,
-				file,
-			);
+			const wrapped = route().handle(async ({ res }) => {
+				const element = await (defFn as () => unknown)();
+				return res.jsx(element);
+			});
 			for (const m of METHOD_EXPORTS) {
 				const mm = m.toLowerCase() as HttpMethod;
 				if (!handlers.has(mm)) handlers.set(mm, wrapped as unknown as Handler);

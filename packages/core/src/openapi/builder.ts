@@ -4,7 +4,6 @@ import type * as v from "valibot";
 import type * as z from "zod";
 import { readParameterJSDoc } from "../utils/jsdoc-extractor.ts";
 import { createLogger } from "../utils/logger.ts";
-import type { ResponseMarker } from "./markers.ts";
 import {
 	isZodLiteral,
 	isZodOptional,
@@ -313,6 +312,62 @@ export const zToJsonSchema = (schema: ZodAny): Json => {
 	}
 };
 
+// ──────────────────────────────────────────────────────────────
+// Response helpers: headers + description defaults
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Builds the OpenAPI `headers` object for a response. Each entry's
+ * value is typically a zod schema from `q.type<T>({ headers: ... })`
+ * — we translate it to JSON Schema so consumers of the doc see the
+ * actual shape instead of a zod reflection blob.
+ */
+function buildResponseHeaders(
+	headers: Record<string, unknown> | undefined,
+):
+	| Record<string, { description?: string; schema?: Json } | { $ref: string }>
+	| undefined {
+	if (!headers) return undefined;
+	const out: Record<
+		string,
+		{ description?: string; schema?: Json } | { $ref: string }
+	> = {};
+	for (const [name, value] of Object.entries(headers)) {
+		if (value && typeof value === "object" && "$ref" in value) {
+			out[name] = value as { $ref: string };
+			continue;
+		}
+		if (isZodSchema(value)) {
+			out[name] = { schema: zToJsonSchema(value as z.ZodTypeAny) };
+			continue;
+		}
+		// Fall back to the raw value — it may already be an OpenAPI
+		// header object provided by the user.
+		out[name] = value as { description?: string; schema?: Json };
+	}
+	return out;
+}
+
+const RESPONSE_DESCRIPTIONS: Record<string, string> = {
+	"1": "Informational",
+	"2": "Success",
+	"3": "Redirection",
+	"4": "Client error",
+	"5": "Server error",
+};
+
+/** Picks a generic description based on the status-code category. */
+function defaultResponseDescription(code: string): string {
+	return RESPONSE_DESCRIPTIONS[code.charAt(0)] ?? "Response";
+}
+
+/** Statuses that must not carry a response body (RFC 9110 §15). */
+const NO_BODY_STATUSES = new Set<number>([204, 205, 304]);
+function isNoBodyStatus(status: number): boolean {
+	if (!Number.isFinite(status)) return false;
+	return NO_BODY_STATUSES.has(status) || (status >= 100 && status < 200);
+}
+
 /**
  * Route-level Valibot schemas per segment.
  */
@@ -341,6 +396,16 @@ export type OperationConfig = {
 		examples?: Json; // example request body
 	};
 	responses: Record<number, ResponseMarker<AnySchema>>;
+};
+
+/** Phantom-typed response marker carried by `q.type<T>()`. */
+type ResponseMarker<T> = {
+	readonly __phantom__?: T;
+	description?: string;
+	contentType?: string;
+	headers?: Record<string, unknown>;
+	examples?: unknown[];
+	deprecated?: boolean;
 };
 /**
  * Options for the {@link OpenAPIBuilder} root document.
@@ -607,19 +672,21 @@ export class OpenAPIBuilder {
 
 		const responses: ResponsesObject = {};
 		for (const [code, res] of Object.entries(op.responses ?? {})) {
-			responses[code] = {
-				description: res.description,
-				headers: res.headers as unknown as Record<
-					string,
-					{ description?: string; schema?: Json } | ReferenceObject
-				>,
-				content: {
+			const entry: ResponseObject = {
+				// OpenAPI 3.1 requires `description` on every response.
+				// Fall back to the status-code category so the doc validates.
+				description: res.description ?? defaultResponseDescription(code),
+				headers: buildResponseHeaders(res.headers),
+			};
+			if (!isNoBodyStatus(Number(code))) {
+				entry.content = {
 					[res.contentType ?? "application/json"]: {
 						schema: {}, // Empty schema for response markers - typing only
 						example: res.examples,
 					},
-				},
-			};
+				};
+			}
+			responses[code] = entry;
 		}
 
 		// Only include responses that are explicitly defined in the route

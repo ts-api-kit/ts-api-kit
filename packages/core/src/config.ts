@@ -34,6 +34,27 @@ export type DirConfig = {
 	};
 };
 
+/**
+ * Type helper for authoring `+config.ts`. At runtime it's a
+ * pass-through; its only job is to give `config` literals a narrow
+ * type without requiring `satisfies DirConfig` at every call site.
+ *
+ * @example
+ * ```ts
+ * // +config.ts
+ * import { defineConfig } from "@ts-api-kit/core";
+ *
+ * export default defineConfig({
+ *   body: { limit: 1_048_576 },
+ *   cors: { origin: "*" },
+ *   timeout: { ms: 5000 },
+ * });
+ * ```
+ */
+export function defineConfig(config: DirConfig): DirConfig {
+	return config;
+}
+
 function toArray<T>(v: T | T[] | undefined): T[] {
 	return Array.isArray(v) ? v : v ? [v] : [];
 }
@@ -102,11 +123,16 @@ export function configToMiddleware(cfg: DirConfig): MiddlewareHandler[] {
 		}
 	}
 
-	// CORS – simple header-based implementation with preflight
+	// CORS – simple header-based implementation with preflight.
+	//
+	// Origin handling follows the spec: only one `Access-Control-Allow-Origin`
+	// value is ever returned. When multiple origins are configured we reflect
+	// the request's `Origin` if it is in the allow-list; otherwise we fall
+	// back to the first configured origin so the header is never empty.
 	if (cfg.cors) {
 		const corsCfg = typeof cfg.cors === "boolean" ? {} : cfg.cors;
-		const origins = toArray(corsCfg.origin?.toString() ?? "*");
-		const allowOrigin = origins.length > 1 ? origins.join(", ") : origins[0];
+		const origins = toArray(corsCfg.origin ?? "*");
+		const allowsAny = origins.includes("*");
 		const methods = (
 			corsCfg.methods ?? ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 		).join(", ");
@@ -117,7 +143,16 @@ export function configToMiddleware(cfg: DirConfig): MiddlewareHandler[] {
 		const credentials = corsCfg.credentials ?? true;
 		const maxAge = corsCfg.maxAge ?? 86400;
 
+		const resolveAllowOrigin = (reqOrigin: string | undefined): string => {
+			if (allowsAny) return credentials ? (reqOrigin ?? "*") : "*";
+			if (reqOrigin && origins.includes(reqOrigin)) return reqOrigin;
+			return origins[0] ?? "*";
+		};
+
 		mws.push(async (c, next) => {
+			const reqOrigin = c.req.header("origin");
+			const allowOrigin = resolveAllowOrigin(reqOrigin);
+
 			// Preflight
 			if (c.req.method === "OPTIONS") {
 				const res = new Response(null, { status: 204 });
@@ -127,7 +162,7 @@ export function configToMiddleware(cfg: DirConfig): MiddlewareHandler[] {
 				h.set("Access-Control-Allow-Methods", methods);
 				h.set("Access-Control-Allow-Headers", headers);
 				if (expose) h.set("Access-Control-Expose-Headers", expose);
-				h.set("Access-Control-Allow-Credentials", String(credentials));
+				if (credentials) h.set("Access-Control-Allow-Credentials", "true");
 				h.set("Access-Control-Max-Age", String(maxAge));
 				return res;
 			}
