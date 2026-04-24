@@ -4,6 +4,12 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { Context } from "hono";
+import {
+	bindRequestContext,
+	setActiveLayouts,
+	unbindRequestContext,
+} from "./context.ts";
 import { buildRes } from "./response.ts";
 
 describe("buildRes", () => {
@@ -111,5 +117,26 @@ describe("buildRes", () => {
 		const out = res(200, undefined);
 		assert.equal(out.status, 200);
 		assert.equal(await out.text(), "");
+	});
+
+	it("`res.jsx` wraps its node through the active layout chain, root-most on the outside", async () => {
+		// Simulate a request cycle by binding a fake context and installing
+		// two layouts: Site (outer) → Section (inner). The rendered HTML
+		// should be <main><section>Home</section></main>.
+		const ctx = {} as Context;
+		bindRequestContext(ctx);
+		try {
+			setActiveLayouts(ctx, [
+				({ children }) => `<main>${children}</main>`,
+				({ children }) => `<section>${children}</section>`,
+			]);
+
+			const res = buildRes();
+			const out = await res.jsx("Home");
+			assert.equal(out.status, 200);
+			assert.equal(await out.text(), "<main><section>Home</section></main>");
+		} finally {
+			unbindRequestContext();
+		}
 	});
 });

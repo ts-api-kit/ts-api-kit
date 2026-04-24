@@ -280,4 +280,151 @@ describe("route() builder", () => {
 		assert.equal(r.status, 200);
 		assert.deepEqual(await r.json(), { greeting: "Hello" });
 	});
+
+	it("returns 400 with a structured `issues` payload on params validation failure", async () => {
+		const h = route()
+			.params(z.object({ id: q.int() }))
+			.returns<{ id: number }>()
+			.handle(async ({ params, res }) => res({ id: params.id }));
+
+		const app = new Hono();
+		app.get("/users/:id", h as unknown as Handler);
+
+		const r = await app.fetch(new Request("http://x/users/not-a-number"));
+		assert.equal(r.status, 400);
+		const body = (await r.json()) as {
+			error: string;
+			location: string;
+			issues: Array<{ path: (string | number)[]; message: string }>;
+		};
+		assert.equal(body.location, "params");
+		assert.ok(Array.isArray(body.issues) && body.issues.length > 0);
+	});
+
+	it("returns 400 with `location: headers` when a required header is missing", async () => {
+		const h = route()
+			.headers(z.object({ "x-request-id": q.str() }))
+			.returns<{ ok: true }>()
+			.handle(async ({ res }) => res({ ok: true }));
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 400);
+		const body = (await r.json()) as { location: string };
+		assert.equal(body.location, "headers");
+	});
+
+	it("accepts x-www-form-urlencoded bodies and validates them", async () => {
+		const h = route()
+			.body(z.object({ name: z.string(), count: q.int() }))
+			.returns<{ name: string; count: number }>()
+			.handle(async ({ body, res }) =>
+				res({ name: body.name, count: body.count }),
+			);
+
+		const app = new Hono();
+		app.post("/", h as unknown as Handler);
+		const r = await app.fetch(
+			new Request("http://x/", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: "name=Ada&count=42",
+			}),
+		);
+		assert.equal(r.status, 200);
+		assert.deepEqual(await r.json(), { name: "Ada", count: 42 });
+	});
+
+	it("handles a multipart body as key/value fields via Hono's parseBody", async () => {
+		const h = route()
+			.body(z.object({ name: z.string() }))
+			.returns<{ name: string }>()
+			.handle(async ({ body, res }) => res({ name: body.name }));
+
+		const app = new Hono();
+		app.post("/", h as unknown as Handler);
+
+		// Build a minimal multipart body by hand.
+		const boundary = "----test-boundary";
+		const payload = [
+			`--${boundary}`,
+			'Content-Disposition: form-data; name="name"',
+			"",
+			"Ada",
+			`--${boundary}--`,
+			"",
+		].join("\r\n");
+
+		const r = await app.fetch(
+			new Request("http://x/", {
+				method: "POST",
+				headers: {
+					"content-type": `multipart/form-data; boundary=${boundary}`,
+				},
+				body: payload,
+			}),
+		);
+		assert.equal(r.status, 200);
+		assert.deepEqual(await r.json(), { name: "Ada" });
+	});
+
+	it("returns 400 with `location: body` on JSON body validation failure", async () => {
+		const h = route()
+			.body(z.object({ count: z.number() }))
+			.returns<{ count: number }>()
+			.handle(async ({ body, res }) => res({ count: body.count }));
+
+		const app = new Hono();
+		app.post("/", h as unknown as Handler);
+
+		const r = await app.fetch(
+			new Request("http://x/", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ count: "not a number" }),
+			}),
+		);
+		assert.equal(r.status, 400);
+		const body = (await r.json()) as { location: string };
+		assert.equal(body.location, "body");
+	});
+
+	it("set-cookie header is preserved when the handler returns a hand-rolled Response", async () => {
+		// Regression test for the CookieSink → Response merge. Returning a
+		// fresh `new Response(...)` normally drops the Set-Cookie header
+		// mutations from the Hono context; the pipeline should append the
+		// drained cookies onto the returned Response.
+		const h = route()
+			.returns<{ ok: true }>()
+			.handle(async ({ cookies }) => {
+				cookies.set("sess", "abc", { path: "/" });
+				return new Response(JSON.stringify({ ok: true }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			});
+
+		const r = await hit(h, new Request("http://x/"));
+		assert.equal(r.status, 200);
+		const cookie = r.headers.get("set-cookie");
+		assert.ok(cookie);
+		assert.ok(cookie.includes("sess=abc"));
+		assert.ok(cookie.includes("Path=/"));
+	});
+
+	it("emits multiple Set-Cookie values as independent headers, not a joined one", async () => {
+		const h = route()
+			.returns<{ ok: true }>()
+			.handle(async ({ cookies, res }) => {
+				cookies.set("a", "1");
+				cookies.set("b", "2");
+				return res({ ok: true });
+			});
+
+		const r = await hit(h, new Request("http://x/"));
+		// Multiple Set-Cookie headers get concatenated by `.get()` but the
+		// raw representation preserves the split.
+		const joined = r.headers.get("set-cookie") ?? "";
+		assert.ok(joined.includes("a=1"));
+		assert.ok(joined.includes("b=2"));
+	});
 });

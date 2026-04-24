@@ -148,3 +148,32 @@ describe("configToMiddleware — rate-limit hints", () => {
 		assert.equal(r.headers.get("x-ratelimit-policy"), "100;w=60");
 	});
 });
+
+describe("configToMiddleware — timeout", () => {
+	it("returns 504 (or a configured status) when the handler exceeds the deadline", async () => {
+		const app = new Hono();
+		for (const mw of configToMiddleware({
+			timeout: { ms: 10, status: 504, message: "too slow" },
+		})) {
+			app.use("*", mw);
+		}
+		app.get("/", async (c) => {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			return c.text("never");
+		});
+
+		const r = await app.fetch(new Request("http://x/"));
+		assert.equal(r.status, 504);
+		assert.deepEqual(await r.json(), { error: "too slow" });
+	});
+
+	it("lets handlers that complete in time pass through unchanged", async () => {
+		const app = new Hono();
+		for (const mw of configToMiddleware({ timeout: 100 })) app.use("*", mw);
+		app.get("/", (c) => c.text("ok"));
+
+		const r = await app.fetch(new Request("http://x/"));
+		assert.equal(r.status, 200);
+		assert.equal(await r.text(), "ok");
+	});
+});

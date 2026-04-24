@@ -159,6 +159,29 @@ describe("OpenAPIBuilder.addOperation — dispatch", () => {
 		assert.equal(response.description, "User not found");
 	});
 
+	it("passes `$ref` header entries through without converting to a schema", () => {
+		const b = freshBuilder();
+		b.addOperation({
+			method: "get",
+			path: "/refd",
+			summary: "",
+			responses: {
+				200: q.type<unknown>({
+					description: "OK",
+					headers: { "x-request-id": { $ref: "#/components/headers/TraceId" } },
+				}),
+			},
+		});
+
+		const response = b.toJSON().paths["/refd"].get.responses["200"];
+		const entry = response.headers?.["x-request-id"] as {
+			$ref?: string;
+			schema?: unknown;
+		};
+		assert.equal(entry.$ref, "#/components/headers/TraceId");
+		assert.equal(entry.schema, undefined);
+	});
+
 	it("omits `content` for 204, 205, 304, and 1xx responses (no-body statuses)", () => {
 		const b = freshBuilder();
 		b.addOperation({
